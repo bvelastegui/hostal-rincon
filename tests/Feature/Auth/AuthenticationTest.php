@@ -6,7 +6,9 @@ use Illuminate\Support\Facades\RateLimiter;
 test('login screen can be rendered', function () {
     $response = $this->get(route('login'));
 
-    $response->assertOk();
+    $response->assertOk()
+        ->assertHeader('X-Robots-Tag', 'noindex, nofollow')
+        ->assertSee('<meta name="robots" content="noindex, nofollow">', escape: false);
 });
 
 test('users can authenticate using the login screen', function () {
