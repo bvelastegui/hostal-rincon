@@ -5,6 +5,7 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -36,3 +37,58 @@ jobs:
 
       - name: Run CI Checks
         run: composer ci:check
+
+  deploy-staging:
+    name: Deploy to QA staging
+    needs: ci
+    if: github.ref == 'refs/heads/main' && vars.STAGING_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+    concurrency:
+      group: qa-staging-deployment
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout tested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.5'
+          tools: composer:v2
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+
+      - name: Build staging release
+        run: |
+          composer install --no-dev --no-interaction --no-progress --prefer-dist --optimize-autoloader
+          npm ci
+          npm run build
+          test -f public/build/manifest.json
+
+      # Enable with the repository variable STAGING_ENABLED=true.
+      # Configure STAGING_URL and DEPLOY_* in the staging environment.
+      # Provision DEPLOY_PATH/shared/.env (APP_ENV=staging, APP_DEBUG=false,
+      # APP_KEY, dedicated staging DB). If using SQLite, set DB_DATABASE to
+      # an absolute file in shared/. Serve DEPLOY_PATH/current/public.
+      - name: Deploy over SSH and verify availability
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGING_URL: ${{ vars.STAGING_URL }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: bash .github/scripts/deploy-staging.sh
