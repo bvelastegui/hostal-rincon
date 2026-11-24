@@ -10,7 +10,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * @property int $id
+ * @property positive-int $id
+ * @property positive-int $bank_id
  * @property string $name
  * @property int $opening_balance_cents
  * @property CarbonImmutable|null $opening_locked_at
