@@ -35,6 +35,7 @@ release="$DEPLOY_PATH/releases/$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
 
 ssh "${ssh_options[@]}" "$target" bash -s -- "$DEPLOY_PATH" "$release" <<'PREPARE'
 set -Eeuo pipefail
+umask 0002
 root="$1"
 release="$2"
 test -f "$root/shared/.env"
@@ -55,6 +56,7 @@ rsync -az --no-owner --no-group \
 
 ssh "${ssh_options[@]}" "$target" bash -s -- "$DEPLOY_PATH" "$release" <<'ACTIVATE'
 set -Eeuo pipefail
+umask 0002
 root="$1"
 release="$2"
 cd "$release"
@@ -62,6 +64,7 @@ ln -s "$root/shared/.env" .env
 ln -s "$root/shared/storage" storage
 mkdir -p bootstrap/cache storage/app/public storage/framework/cache/data \
     storage/framework/sessions storage/framework/views storage/logs
+chmod g+w bootstrap/cache
 
 composer check-platform-reqs --no-dev --no-interaction
 php -r '

@@ -81,6 +81,8 @@ jobs:
       # Provision DEPLOY_PATH/shared/.env (APP_ENV=staging, APP_DEBUG=false,
       # APP_KEY, dedicated staging DB). If using SQLite, set DB_DATABASE to
       # an absolute file in shared/. Serve DEPLOY_PATH/current/public.
+      # Give the SSH user write access and share Laravel's writable paths
+      # with PHP-FPM using the server's web group (setgid directories).
       - name: Deploy over SSH and verify availability
         env:
           GH_TOKEN: ${{ github.token }}
