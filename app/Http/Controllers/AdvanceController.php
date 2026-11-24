@@ -24,8 +24,8 @@ class AdvanceController extends Controller
         ]);
 
         $employees = User::query()->operators()->orderBy('name')
-            ->withSum(['advances as pending_cents' => fn (Builder $query) => $query->pending()], 'amount_cents')
-            ->withMax(['advances as latest_pending_id' => fn (Builder $query) => $query->pending()], 'id')
+            ->withSum('pendingAdvances as pending_cents', 'amount_cents')
+            ->withMax('pendingAdvances as latest_pending_id', 'id')
             ->get(['id', 'name']);
 
         $history = Advance::query()
@@ -58,7 +58,7 @@ class AdvanceController extends Controller
 
         return Inertia::render('AdvanceCreate', [
             'employee' => ['id' => $employee->id, 'name' => $employee->name],
-            'pendingCents' => (int) $employee->advances()->pending()->sum('amount_cents'),
+            'pendingCents' => (int) $employee->pendingAdvances()->sum('amount_cents'),
             'limitCents' => Advance::LIMIT_CENTS,
             'requestToken' => (string) Str::uuid(),
         ]);
@@ -95,7 +95,7 @@ class AdvanceController extends Controller
                 throw ValidationException::withMessages(['request_id' => 'Esta solicitud ya se utilizó. Cierra el formulario y vuelve a abrirlo.']);
             }
 
-            $pendingCents = (int) $employee->advances()->pending()->sum('amount_cents');
+            $pendingCents = (int) $employee->pendingAdvances()->sum('amount_cents');
             if ($pendingCents + $amountCents > Advance::LIMIT_CENTS) {
                 $available = number_format((Advance::LIMIT_CENTS - $pendingCents) / 100, 2, ',', '.');
 
@@ -128,7 +128,7 @@ class AdvanceController extends Controller
 
         DB::transaction(function () use ($employee, $data, $user): void {
             $employee = User::query()->lockForUpdate()->findOrFail($employee->id);
-            $pending = $employee->advances()->pending();
+            $pending = $employee->pendingAdvances();
             $latestPendingId = $pending->max('id');
 
             if ($latestPendingId === null) {

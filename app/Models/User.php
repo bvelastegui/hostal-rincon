@@ -49,6 +49,15 @@ class User extends Authenticatable
         return $this->hasMany(Advance::class, 'employee_id');
     }
 
+    /** @return HasMany<Advance, $this> */
+    public function pendingAdvances(): HasMany
+    {
+        $advances = $this->advances();
+        $advances->pending();
+
+        return $advances;
+    }
+
     /**
      * Get the attributes that should be cast.
      *
