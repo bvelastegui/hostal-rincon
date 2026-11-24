@@ -4,7 +4,15 @@ El proyecto usa versionamiento semántico (`MAJOR.MINOR.PATCH`). Incrementa `MAJ
 
 Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la fecha en formato `AAAA-MM-DD` y etiqueta el commit de la entrega con `vMAJOR.MINOR.PATCH`.
 
-## 0.1.0 (prevista)
+## 0.2.0 (prevista)
+
+### Movimientos de caja
+
+- Registra cobros en efectivo y ofrece **Guardar** o **Guardar y confirmar** para transferencias. Los cobros por transferencia identifican el banco de origen y la cuenta de destino. El voucher es único por banco de origen. [HR-14](https://nexodigital.youtrack.cloud/issue/HR-14)
+- Registra egresos en efectivo o desde una cuenta bancaria a nombre del usuario de la sesión. El historial se consulta por fecha. [HR-12](https://nexodigital.youtrack.cloud/issue/HR-12)
+- La administradora registra los retiros para depósito. El importe pasa de caja a tránsito y se acredita en banco con voucher o vuelve a caja al devolverlo. El traslado conserva el total. [HR-11](https://nexodigital.youtrack.cloud/issue/HR-11)
+
+## 0.1.0 (staging · 2026-11-24)
 
 ### Adelantos
 
