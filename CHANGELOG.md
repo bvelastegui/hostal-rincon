@@ -4,6 +4,15 @@ El proyecto usa versionamiento semántico (`MAJOR.MINOR.PATCH`). Incrementa `MAJ
 
 Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la fecha en formato `AAAA-MM-DD` y etiqueta el commit de la entrega con `vMAJOR.MINOR.PATCH`.
 
+## 0.3.0 (prevista)
+
+### Adelantos y empleados
+
+- Permite crear y editar empleados desde Adelantos usando sus cuentas de operador existentes; editar no cambia la contraseña salvo que se ingrese una nueva.
+- Añade filtro por mes calendario y una acción para limpiar los filtros del historial.
+- Destaca visualmente los importes y registros pendientes de descuento.
+- No agrega una tabla de empleados. [HR-13](https://nexodigital.youtrack.cloud/issue/HR-13)
+
 ## 0.2.0 (prevista)
 
 ### Movimientos de caja
