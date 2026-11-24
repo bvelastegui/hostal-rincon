@@ -4,6 +4,8 @@ use App\Models\User;
 
 return [
 
+    'superadmin_password' => env('SUPERADMIN_PASSWORD'),
+
     /*
     |--------------------------------------------------------------------------
     | Authentication Defaults
