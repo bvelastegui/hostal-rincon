@@ -41,7 +41,8 @@ return [
             'busy_timeout' => null,
             'journal_mode' => null,
             'synchronous' => null,
-            'transaction_mode' => 'DEFERRED',
+            // SQLite needs an immediate transaction to serialize advance balance changes.
+            'transaction_mode' => 'IMMEDIATE',
         ],
 
         'mysql' => [
