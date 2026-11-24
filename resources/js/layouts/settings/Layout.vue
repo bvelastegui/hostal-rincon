@@ -1,71 +1,52 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import Heading from '@/components/Heading.vue';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
+import {
+    NavigationMenu,
+    NavigationMenuItem,
+    NavigationMenuLink,
+    NavigationMenuList,
+} from '@/components/ui/navigation-menu';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
-import { toUrl } from '@/lib/utils';
 import { edit as editAppearance } from '@/routes/appearance';
 import { edit as editProfile } from '@/routes/profile';
 import { edit as editSecurity } from '@/routes/security';
-import type { NavItem } from '@/types';
 
-const sidebarNavItems: NavItem[] = [
-    {
-        title: 'Profile',
-        href: editProfile(),
-    },
-    {
-        title: 'Security',
-        href: editSecurity(),
-    },
-    {
-        title: 'Appearance',
-        href: editAppearance(),
-    },
+const settingsLinks = [
+    { title: 'Perfil', href: editProfile() },
+    { title: 'Seguridad', href: editSecurity() },
+    { title: 'Apariencia', href: editAppearance() },
 ];
 
-const { isCurrentOrParentUrl } = useCurrentUrl();
+const { isCurrentUrl } = useCurrentUrl();
 </script>
 
 <template>
-    <div class="px-4 py-6">
-        <Heading
-            title="Settings"
-            description="Manage your profile and account settings"
-        />
-
-        <div class="flex flex-col lg:flex-row lg:space-x-12">
-            <aside class="w-full max-w-xl lg:w-48">
-                <nav
-                    class="flex flex-col space-y-1 space-x-0"
-                    aria-label="Settings"
-                >
-                    <Button
-                        v-for="item in sidebarNavItems"
-                        :key="toUrl(item.href)"
-                        variant="ghost"
-                        :class="[
-                            'w-full justify-start',
-                            { 'bg-muted': isCurrentOrParentUrl(item.href) },
-                        ]"
-                        as-child
+    <div class="space-y-6">
+        <header class="border-b">
+            <h1 class="mb-4 text-2xl font-semibold tracking-tight">Ajustes</h1>
+            <NavigationMenu
+                :viewport="false"
+                aria-label="Secciones de ajustes"
+                class="w-full max-w-none [&>div]:w-full"
+            >
+                <NavigationMenuList class="w-full gap-0">
+                    <NavigationMenuItem
+                        v-for="item in settingsLinks"
+                        :key="item.title"
+                        class="min-w-0 flex-1"
                     >
-                        <Link :href="item.href">
-                            <component :is="item.icon" class="h-4 w-4" />
-                            {{ item.title }}
-                        </Link>
-                    </Button>
-                </nav>
-            </aside>
+                        <NavigationMenuLink
+                            as-child
+                            :active="isCurrentUrl(item.href)"
+                            class="min-h-11 w-full items-center justify-center rounded-none border-b-2 border-transparent font-medium data-active:border-primary"
+                        >
+                            <Link :href="item.href">{{ item.title }}</Link>
+                        </NavigationMenuLink>
+                    </NavigationMenuItem>
+                </NavigationMenuList>
+            </NavigationMenu>
+        </header>
 
-            <Separator class="my-6 lg:hidden" />
-
-            <div class="flex-1 md:max-w-2xl">
-                <section class="max-w-xl space-y-12">
-                    <slot />
-                </section>
-            </div>
-        </div>
+        <slot />
     </div>
 </template>

@@ -106,7 +106,7 @@ function applyFilters(): void {
 </script>
 
 <template>
-    <div class="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6">
+    <div class="space-y-6">
         <Head title="Adelantos" />
         <header class="space-y-1">
             <h1 class="text-2xl font-semibold tracking-tight">Adelantos</h1>
@@ -292,12 +292,12 @@ function applyFilters(): void {
             <nav
                 v-if="history.last_page > 1"
                 aria-label="Páginas del historial"
-                class="flex flex-wrap items-center justify-between gap-2"
+                class="flex flex-col items-center justify-between gap-2 sm:flex-row"
             >
                 <Button
                     v-if="history.prev_page_url"
                     variant="outline"
-                    class="min-h-11"
+                    class="min-h-11 w-full sm:w-auto"
                     as-child
                 >
                     <Link
@@ -314,7 +314,7 @@ function applyFilters(): void {
                 <Button
                     v-if="history.next_page_url"
                     variant="outline"
-                    class="min-h-11"
+                    class="min-h-11 w-full sm:w-auto"
                     as-child
                 >
                     <Link

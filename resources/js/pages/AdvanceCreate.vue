@@ -37,9 +37,7 @@ function submit(): void {
 </script>
 
 <template>
-    <div
-        class="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-4 py-5 sm:px-6 sm:py-8"
-    >
+    <div class="flex flex-1 flex-col gap-6">
         <Head title="Registrar adelanto" />
 
         <header class="space-y-1">
@@ -114,7 +112,11 @@ function submit(): void {
                 Límite alcanzado. Registra el descuento completo para habilitar
                 nuevos adelantos.
             </p>
-            <Button as-child variant="outline" class="min-h-11">
+            <Button
+                as-child
+                variant="outline"
+                class="min-h-11 w-full sm:w-auto"
+            >
                 <Link :href="index()">Volver a adelantos</Link>
             </Button>
         </div>
