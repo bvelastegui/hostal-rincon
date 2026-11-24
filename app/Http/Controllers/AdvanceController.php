@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -48,7 +47,6 @@ class AdvanceController extends Controller
             'history' => $history,
             'filters' => $filters,
             'limitCents' => Advance::LIMIT_CENTS,
-            'canDeduct' => Gate::allows('deduct-advances'),
         ]);
     }
 
@@ -121,8 +119,6 @@ class AdvanceController extends Controller
 
     public function deduct(Request $request, User $employee): RedirectResponse
     {
-        Gate::authorize('deduct-advances');
-
         $data = $request->validate(['latest_pending_id' => ['required', 'integer', 'min:1']]);
         $user = $request->user();
 

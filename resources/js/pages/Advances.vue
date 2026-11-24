@@ -52,7 +52,6 @@ const props = defineProps<{
     };
     filters: { employee?: string | number; status?: string };
     limitCents: number;
-    canDeduct: boolean;
 }>();
 
 defineOptions({
@@ -163,7 +162,7 @@ function applyFilters(): void {
                             >
                         </Button>
                         <Button
-                            v-if="canDeduct && employee.pendingCents"
+                            v-if="employee.pendingCents"
                             variant="outline"
                             class="min-h-11"
                             @click="openDeduction(employee)"

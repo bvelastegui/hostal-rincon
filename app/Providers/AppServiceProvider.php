@@ -27,7 +27,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
 
-        Gate::define('deduct-advances', fn (User $user): bool => $user->is_admin);
+        Gate::define('manage-advances', fn (User $user): bool => $user->is_admin);
     }
 
     /**
