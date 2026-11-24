@@ -11,6 +11,12 @@ Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la f
 - Permite a los administradores registrar adelantos en USD para empleados que ya tienen una cuenta en el sistema. [PR #1](https://github.com/bvelastegui/hostal-rincon/pull/1)
 - Bloquea registros que elevarían el saldo pendiente de un empleado por encima de USD 300. Al pagar el sueldo, el administrador puede marcar todos sus adelantos pendientes como descontados. [PR #1](https://github.com/bvelastegui/hostal-rincon/pull/1)
 
+### Efectivo y bancos
+
+- La administradora configura los saldos iniciales en USD, registra cuentas y activa o desactiva los bancos admitidos.
+- Las cuentas conservan su historial al desactivar su banco. El alias de una cuenta sigue siendo editable después de bloquear su saldo inicial. [HR-10](https://nexodigital.youtrack.cloud/issue/HR-10)
+- La tarjeta de configuración inicial del Panel muestra el avance de efectivo, banco y cuenta bancaria. La administradora puede ocultarla al completar los tres pasos. Vuelve a aparecer si surge un pendiente. [PR #4](https://github.com/bvelastegui/hostal-rincon/pull/4)
+
 ### Pruebas y despliegue
 
 - Ejecuta validaciones de código y pruebas con Pest en GitHub Actions. Despliega a staging para QA cuando `main` pasa CI y el despliegue está habilitado. Incluye datos de prueba para dos empleados. [PR #2](https://github.com/bvelastegui/hostal-rincon/pull/2)

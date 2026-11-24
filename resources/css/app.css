@@ -15,6 +15,35 @@
     }
 }
 
+@utility settings-form-row {
+    @variant lg {
+        grid-template-rows: auto auto auto;
+        align-items: start;
+
+        & > [data-slot='field'] {
+            display: grid;
+            grid-row: span 3;
+            grid-template-rows: subgrid;
+            min-width: 0;
+            row-gap: 0;
+        }
+
+        & > [data-slot='field'] > [data-slot='field-label'] {
+            margin-bottom: 0.75rem;
+        }
+
+        & > [data-slot='field'] > [data-slot='field-error'] {
+            margin-top: 0.5rem;
+        }
+
+        & > [data-slot='button'] {
+            grid-row: 2;
+            grid-column: -2 / -1;
+            width: auto;
+        }
+    }
+}
+
 @theme inline {
     --font-sans:
         'Instrument Sans', ui-sans-serif, system-ui, sans-serif,

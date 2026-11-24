@@ -42,6 +42,7 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
                 'canManageAdvances' => Gate::allows('manage-advances'),
+                'canManageCashSettings' => Gate::allows('manage-cash-settings'),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];

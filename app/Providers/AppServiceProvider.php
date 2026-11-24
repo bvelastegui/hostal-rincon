@@ -28,6 +28,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
 
         Gate::define('manage-advances', fn (User $user): bool => $user->is_admin);
+        Gate::define('manage-cash-settings', fn (User $user): bool => $user->is_admin);
     }
 
     /**

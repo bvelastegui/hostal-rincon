@@ -9,6 +9,7 @@ import LogoutLink from '@/components/LogoutLink.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import { edit } from '@/routes/profile';
 
 defineOptions({
@@ -33,6 +34,7 @@ const user = computed(() => page.props.auth.user);
         <Heading
             variant="small"
             title="Perfil"
+            hide-title-on-mobile
             description="Actualiza tu nombre y correo electrónico"
         />
 
@@ -79,6 +81,8 @@ const user = computed(() => page.props.auth.user);
                 Guardar cambios
             </Button>
         </Form>
+
+        <Separator class="lg:hidden" />
 
         <Button
             as-child
