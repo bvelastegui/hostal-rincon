@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['request_id', 'employee_name', 'amount_cents', 'issued_on', 'responsible', 'note', 'recorded_by', 'recorder_name'])]
+#[Fillable(['request_id', 'cash_opening_id', 'employee_name', 'amount_cents', 'issued_on', 'responsible', 'note', 'recorded_by', 'recorder_name'])]
 class Advance extends Model
 {
     /** @use HasFactory<AdvanceFactory> */

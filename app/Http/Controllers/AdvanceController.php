@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\ConvertUsdToCents;
 use App\Models\Advance;
+use App\Models\CashOpening;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -75,8 +77,7 @@ class AdvanceController extends Controller
             'amount.max' => 'El monto supera el límite de adelantos.',
         ]);
 
-        [$units, $fraction] = array_pad(explode('.', (string) $data['amount'], 2), 2, '');
-        $amountCents = (int) $units * 100 + (int) str_pad($fraction, 2, '0');
+        $amountCents = ConvertUsdToCents::fromDecimal((string) $data['amount']);
         $user = $request->user();
 
         DB::transaction(function () use ($employee, $data, $amountCents, $user): void {
@@ -100,7 +101,14 @@ class AdvanceController extends Controller
                 throw ValidationException::withMessages(['amount' => "El monto supera el disponible de USD {$available}."]);
             }
 
+            $opening = CashOpening::query()->lockForUpdate()->sole();
+            if ($opening->opening_balance_cents !== null && $opening->opening_locked_at === null) {
+                $opening->opening_locked_at = now();
+                $opening->save();
+            }
+
             $employee->advances()->create([
+                'cash_opening_id' => $opening->opening_balance_cents === null ? null : $opening->id,
                 'request_id' => $data['request_id'],
                 'amount_cents' => $amountCents,
                 'employee_name' => $employee->name,
