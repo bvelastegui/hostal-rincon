@@ -1,11 +1,14 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/vue-starter-kit",
+    "name": "bvelastegui/hostal-rincon",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
+    "description": "Aplicación privada para la gestión de caja y adelantos de sueldo del Hostal Rincón.",
     "keywords": [
+        "hostal",
+        "gestion-de-caja",
+        "adelantos-de-sueldo",
         "laravel",
-        "framework"
+        "vue"
     ],
     "license": "MIT",
     "require": {

@@ -1,7 +1,16 @@
 {
     "$schema": "https://www.schemastore.org/package.json",
+    "name": "hostal-rincon",
     "version": "0.1.0",
     "private": true,
+    "description": "Aplicación privada para la gestión de caja y adelantos de sueldo del Hostal Rincón.",
+    "keywords": [
+        "adelantos-de-sueldo",
+        "gestion-de-caja",
+        "hostal",
+        "laravel",
+        "vue"
+    ],
     "type": "module",
     "scripts": {
         "build": "vp build",
