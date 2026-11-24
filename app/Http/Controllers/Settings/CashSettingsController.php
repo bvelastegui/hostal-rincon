@@ -85,7 +85,7 @@ class CashSettingsController extends Controller
     {
         return Inertia::render('settings/BankAccountForm', [
             'account' => null,
-            'banks' => Bank::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'banks' => Bank::query()->active()->orderBy('name')->get(['id', 'name']),
         ]);
     }
 

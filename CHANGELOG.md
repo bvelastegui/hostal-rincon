@@ -15,6 +15,7 @@ Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la f
 
 - La administradora configura los saldos iniciales en USD, registra cuentas y activa o desactiva los bancos admitidos.
 - Las cuentas conservan su historial al desactivar su banco. El alias de una cuenta sigue siendo editable después de bloquear su saldo inicial. [HR-10](https://nexodigital.youtrack.cloud/issue/HR-10)
+- La tarjeta de configuración inicial del Panel muestra el avance de efectivo, banco y cuenta bancaria. La administradora puede ocultarla al completar los tres pasos. Vuelve a aparecer si surge un pendiente. [PR #4](https://github.com/bvelastegui/hostal-rincon/pull/4)
 
 ### Pruebas y despliegue
 
