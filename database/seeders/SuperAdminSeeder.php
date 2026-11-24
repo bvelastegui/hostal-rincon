@@ -8,9 +8,11 @@ use Illuminate\Support\Str;
 
 class SuperAdminSeeder extends Seeder
 {
+    public const string EMAIL = 'soporte@nexodigital.com';
+
     public function run(): void
     {
-        $user = User::query()->firstOrNew(['email' => 'soporte@nexodigital.com']);
+        $user = User::query()->firstOrNew(['email' => self::EMAIL]);
 
         if (! $user->exists) {
             $password = config('auth.superadmin_password');
