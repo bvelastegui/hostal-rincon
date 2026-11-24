@@ -13,7 +13,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
 
 /**
- * @property int $id
+ * @property positive-int $id
  * @property string $name
  * @property string $email
  * @property Carbon|null $email_verified_at

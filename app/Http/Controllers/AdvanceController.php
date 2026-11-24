@@ -102,10 +102,7 @@ class AdvanceController extends Controller
             }
 
             $opening = CashOpening::query()->lockForUpdate()->sole();
-            if ($opening->opening_balance_cents !== null && $opening->opening_locked_at === null) {
-                $opening->opening_locked_at = now();
-                $opening->save();
-            }
+            $opening->markUsed();
 
             $employee->advances()->create([
                 'cash_opening_id' => $opening->opening_balance_cents === null ? null : $opening->id,
