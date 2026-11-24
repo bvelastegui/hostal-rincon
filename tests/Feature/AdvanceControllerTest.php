@@ -2,6 +2,7 @@
 
 use App\Models\Advance;
 use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -144,4 +145,70 @@ test('abre el formulario de adelantos en una página para el operador selecciona
             ->where('employee.id', $employee->id)
             ->where('pendingCents', 25000)
             ->where('limitCents', 30000));
+});
+
+test('permite a la administradora crear una cuenta de empleado operativa', function () {
+    $administrator = User::factory()->create(['is_admin' => true]);
+    $data = [
+        'name' => 'Ana Torres',
+        'email' => 'ana.torres@example.com',
+        'password' => 'ClaveInicial123!',
+        'password_confirmation' => 'ClaveInicial123!',
+    ];
+
+    $this->actingAs($administrator)->post(route('advances.employees.store'), $data)
+        ->assertRedirectToRoute('advances.index')->assertSessionHasNoErrors();
+
+    $employee = User::query()->where('email', $data['email'])->sole();
+    expect($employee->is_admin)->toBeFalse();
+    expect($employee->email_verified_at)->not->toBeNull();
+    expect(Hash::check($data['password'], $employee->password))->toBeTrue();
+});
+
+test('permite editar los datos de operador y conserva la contraseña si no se cambia', function () {
+    $administrator = User::factory()->create(['is_admin' => true]);
+    $employee = User::factory()->create(['name' => 'Ana Torres', 'email' => 'ana@example.com']);
+
+    $this->actingAs($administrator)->put(route('advances.employees.update', $employee), [
+        'name' => 'Ana María Torres',
+        'email' => 'ana.maria@example.com',
+        'password' => '',
+        'password_confirmation' => '',
+    ])->assertRedirectToRoute('advances.index')->assertSessionHasNoErrors();
+
+    $employee->refresh();
+    expect($employee->name)->toBe('Ana María Torres');
+    expect($employee->email)->toBe('ana.maria@example.com');
+    expect($employee->is_admin)->toBeFalse();
+    expect(Hash::check('password', $employee->password))->toBeTrue();
+});
+
+test('filtra el historial por mes calendario e incluye sus dos extremos', function () {
+    $administrator = User::factory()->create(['is_admin' => true]);
+    $employee = User::factory()->create();
+    $first = Advance::factory()->for($employee, 'employee')->create(['issued_on' => '2026-10-01']);
+    $last = Advance::factory()->for($employee, 'employee')->create(['issued_on' => '2026-10-31']);
+    Advance::factory()->for($employee, 'employee')->create(['issued_on' => '2026-11-01']);
+
+    $this->actingAs($administrator)->withoutVite()->get(route('advances.index', ['month' => '2026-10']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->component('Advances')
+            ->where('filters.month', '2026-10')
+            ->has('history.data', 2)
+            ->where('history.data.0.id', $last->id)
+            ->where('history.data.1.id', $first->id));
+});
+
+test('el operador no puede crear ni modificar cuentas de empleados', function () {
+    $operator = User::factory()->create();
+    $employee = User::factory()->create(['name' => 'Ana Torres']);
+    $this->actingAs($operator);
+
+    $this->get(route('advances.employees.create'))->assertForbidden();
+    $this->post(route('advances.employees.store'), [])->assertForbidden();
+    $this->get(route('advances.employees.edit', $employee))->assertForbidden();
+    $this->put(route('advances.employees.update', $employee), ['name' => 'Cambio'])->assertForbidden();
+
+    expect($employee->refresh()->name)->toBe('Ana Torres');
+    $this->assertDatabaseCount('users', 2);
 });

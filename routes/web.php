@@ -25,6 +25,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     Route::prefix('adelantos')->name('advances.')->middleware('can:manage-advances')->group(function () {
         Route::get('/', [AdvanceController::class, 'index'])->name('index');
+        Route::get('empleados/nuevo', [AdvanceController::class, 'createEmployee'])->name('employees.create');
+        Route::post('empleados', [AdvanceController::class, 'storeEmployee'])->name('employees.store');
+        Route::get('empleados/{employee}/editar', [AdvanceController::class, 'editEmployee'])->name('employees.edit');
+        Route::put('empleados/{employee}', [AdvanceController::class, 'updateEmployee'])->name('employees.update');
         Route::get('{employee}/nuevo', [AdvanceController::class, 'create'])->name('create');
         Route::post('{employee}', [AdvanceController::class, 'store'])->name('store');
         Route::post('{employee}/descuento', [AdvanceController::class, 'deduct'])->name('deduct');

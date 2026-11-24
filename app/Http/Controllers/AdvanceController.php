@@ -9,8 +9,11 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -22,6 +25,7 @@ class AdvanceController extends Controller
         $filters = $request->validate([
             'employee' => ['nullable', 'integer', 'exists:users,id'],
             'status' => ['nullable', 'in:pending,deducted'],
+            'month' => ['nullable', 'date_format:Y-m'],
         ]);
 
         $employees = User::query()->operators()->orderBy('name')
@@ -31,6 +35,9 @@ class AdvanceController extends Controller
 
         $history = Advance::query()
             ->when($filters['employee'] ?? null, fn (Builder $query, int|string $id) => $query->where('employee_id', $id))
+            ->when($filters['month'] ?? null, fn (Builder $query, string $month) => $query
+                ->where('issued_on', '>=', $month.'-01')
+                ->where('issued_on', '<', Carbon::createFromFormat('!Y-m', $month)->addMonth()->startOfMonth()->toDateString()))
             ->when(($filters['status'] ?? null) === 'pending', fn (Builder $query) => $query->pending())
             ->when(($filters['status'] ?? null) === 'deducted', fn (Builder $query) => $query->whereNotNull('deducted_at'))
             ->orderByDesc('issued_on')->orderByDesc('id')
@@ -50,6 +57,75 @@ class AdvanceController extends Controller
             'filters' => $filters,
             'limitCents' => Advance::LIMIT_CENTS,
         ]);
+    }
+
+    public function createEmployee(): Response
+    {
+        return Inertia::render('AdvanceEmployeeForm', ['employee' => null]);
+    }
+
+    public function editEmployee(User $employee): Response
+    {
+        abort_if($employee->is_admin, 404);
+
+        return Inertia::render('AdvanceEmployeeForm', [
+            'employee' => ['id' => $employee->id, 'name' => $employee->name, 'email' => $employee->email],
+        ]);
+    }
+
+    public function storeEmployee(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ], [
+            'name.required' => 'Ingresa el nombre del empleado.',
+            'email.required' => 'Ingresa el correo del empleado.',
+            'email.unique' => 'Ya existe una cuenta con este correo.',
+            'password.required' => 'Define una contraseña inicial para el empleado.',
+            'password.confirmed' => 'Las contraseñas no coinciden.',
+            'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
+        ]);
+
+        $employee = User::query()->create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
+        ]);
+        $employee->forceFill(['email_verified_at' => now()])->save();
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Empleado creado.']);
+
+        return to_route('advances.index');
+    }
+
+    public function updateEmployee(Request $request, User $employee): RedirectResponse
+    {
+        abort_if($employee->is_admin, 404);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($employee->id)],
+            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+        ], [
+            'name.required' => 'Ingresa el nombre del empleado.',
+            'email.required' => 'Ingresa el correo del empleado.',
+            'email.unique' => 'Ya existe una cuenta con este correo.',
+            'password.confirmed' => 'Las contraseñas no coinciden.',
+            'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
+        ]);
+
+        $employee->name = $data['name'];
+        $employee->email = $data['email'];
+        if ($request->filled('password')) {
+            $employee->password = Hash::make($data['password']);
+        }
+        $employee->save();
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Datos del empleado actualizados.']);
+
+        return to_route('advances.index');
     }
 
     public function create(User $employee): Response
