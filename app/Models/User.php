@@ -5,7 +5,9 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -34,6 +36,18 @@ class User extends Authenticatable
     protected $attributes = [
         'is_admin' => false,
     ];
+
+    /** @param Builder<User> $query */
+    public function scopeOperators(Builder $query): void
+    {
+        $query->where('is_admin', false);
+    }
+
+    /** @return HasMany<Advance, $this> */
+    public function advances(): HasMany
+    {
+        return $this->hasMany(Advance::class, 'employee_id');
+    }
 
     /**
      * Get the attributes that should be cast.
