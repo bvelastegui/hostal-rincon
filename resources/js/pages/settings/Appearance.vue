@@ -23,6 +23,7 @@ defineOptions({
         <Heading
             variant="small"
             title="Apariencia"
+            hide-title-on-mobile
             description="Elige el tema de la aplicación"
         />
         <AppearanceTabs />

@@ -3,6 +3,7 @@ type Props = {
     title: string;
     description?: string;
     variant?: 'default' | 'small';
+    hideTitleOnMobile?: boolean;
 };
 
 withDefaults(defineProps<Props>(), {
@@ -11,13 +12,19 @@ withDefaults(defineProps<Props>(), {
 </script>
 
 <template>
-    <header :class="variant === 'small' ? '' : 'mb-8 space-y-0.5'">
+    <header
+        :class="[
+            variant === 'small' ? '' : 'mb-8 space-y-0.5',
+            hideTitleOnMobile && !description && 'max-lg:sr-only',
+        ]"
+    >
         <h2
-            :class="
+            :class="[
                 variant === 'small'
                     ? 'mb-0.5 text-base font-medium'
-                    : 'text-xl font-semibold tracking-tight'
-            "
+                    : 'text-xl font-semibold tracking-tight',
+                hideTitleOnMobile && description && 'max-lg:sr-only',
+            ]"
         >
             {{ title }}
         </h2>
