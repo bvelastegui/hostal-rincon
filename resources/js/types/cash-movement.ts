@@ -42,3 +42,10 @@ export type MovementRow =
           status: MovementStatus;
           account: string | null;
       };
+
+export type CashBalances = {
+    cash: number | null;
+    bank: number;
+    transit: number | null;
+    total: number | null;
+};

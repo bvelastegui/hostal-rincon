@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -46,6 +47,18 @@ class CashClosing extends Model
     public function shortageResolvedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'shortage_resolved_by');
+    }
+
+    /** @param Builder<CashClosing> $query */
+    public function scopeShortages(Builder $query): void
+    {
+        $query->where('difference_cents', '<', 0);
+    }
+
+    /** @param Builder<CashClosing> $query */
+    public function scopeUnresolvedShortages(Builder $query): void
+    {
+        $query->shortages()->whereNull('shortage_resolved_at');
     }
 
     /** @return array<string, string> */

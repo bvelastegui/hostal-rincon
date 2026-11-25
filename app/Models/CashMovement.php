@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -53,6 +54,21 @@ class CashMovement extends Model
     public function detailsVisibleTo(User $user): bool
     {
         return $user->is_admin || ! $this->isSensitive();
+    }
+
+    /**
+     * @param  Builder<CashMovement>  $query
+     * @return Builder<CashMovement>
+     */
+    public function scopeWithStatus(Builder $query, ?string $status): Builder
+    {
+        return match ($status) {
+            'confirmed' => $query->whereNotNull('confirmed_at')->whereNull('returned_at'),
+            'returned' => $query->whereNotNull('returned_at'),
+            'pending' => $query->where('kind', '!=', 'deposit')->whereNull('confirmed_at')->whereNull('returned_at'),
+            'in_transit' => $query->where('kind', 'deposit')->whereNull('confirmed_at')->whereNull('returned_at'),
+            default => $query,
+        };
     }
 
     /** @return 'returned'|'confirmed'|'in_transit'|'pending' */
