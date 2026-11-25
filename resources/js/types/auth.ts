@@ -13,4 +13,6 @@ export type Auth = {
     user: User;
     canManageAdvances: boolean;
     canManageCashSettings: boolean;
+    cashShiftAccess: 'owner' | 'restricted' | null;
+    activeCashShift: { responsible: string; awaitingReceipt: boolean } | null;
 };

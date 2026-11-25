@@ -12,12 +12,12 @@ test('solo la administración ve y modifica la configuración de caja', function
     $this->get(route('cash-settings.edit'))->assertRedirectToRoute('login');
     $this->get(route('bank-settings.accounts.create'))->assertRedirectToRoute('login');
 
-    $this->actingAs(User::factory()->create())->withoutVite()->get(route('profile.edit'))
+    $this->actingAs(User::factory()->create())->withoutVite()->get(route('cash-closings.index'))
         ->assertInertia(fn (Assert $page) => $page->where('auth.canManageCashSettings', false));
-    $this->get(route('cash-settings.edit'))->assertForbidden();
-    $this->get(route('bank-settings.edit'))->assertForbidden();
-    $this->get(route('bank-settings.accounts.create'))->assertForbidden();
-    $this->get(route('bank-settings.accounts.edit', $account))->assertForbidden();
+    $this->get(route('cash-settings.edit'))->assertRedirectToRoute('cash-closings.index');
+    $this->get(route('bank-settings.edit'))->assertRedirectToRoute('cash-closings.index');
+    $this->get(route('bank-settings.accounts.create'))->assertRedirectToRoute('cash-closings.index');
+    $this->get(route('bank-settings.accounts.edit', $account))->assertRedirectToRoute('cash-closings.index');
     $this->patch(route('bank-settings.status.update', $account->bank), ['is_active' => false])->assertForbidden();
     $this->put(route('cash-settings.opening.update'), ['opening_balance' => '12'])->assertForbidden();
     $this->post(route('bank-settings.store'), ['name' => 'Banco ficticio'])->assertForbidden();

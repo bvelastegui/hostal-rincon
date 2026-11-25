@@ -58,11 +58,11 @@ test('el empleado no puede acceder a adelantos ni ve la opción en el menú', fu
     $employee = User::factory()->create();
     $advance = Advance::factory()->for($employee, 'employee')->create();
 
-    $this->actingAs($employee)->withoutVite()->get(route('dashboard'))
+    $this->actingAs($employee)->withoutVite()->get(route('cash-closings.index'))
         ->assertInertia(fn (Assert $page) => $page->where('auth.canManageAdvances', false));
 
-    $this->get(route('advances.index'))->assertForbidden();
-    $this->get(route('advances.create', $employee))->assertForbidden();
+    $this->get(route('advances.index'))->assertRedirectToRoute('cash-closings.index');
+    $this->get(route('advances.create', $employee))->assertRedirectToRoute('cash-closings.index');
     $this->post(route('advances.store', $employee), [
         'request_id' => (string) Str::uuid(),
         'amount' => '50',
@@ -204,9 +204,9 @@ test('el operador no puede crear ni modificar cuentas de empleados', function ()
     $employee = User::factory()->create(['name' => 'Ana Torres']);
     $this->actingAs($operator);
 
-    $this->get(route('advances.employees.create'))->assertForbidden();
+    $this->get(route('advances.employees.create'))->assertRedirectToRoute('cash-closings.index');
     $this->post(route('advances.employees.store'), [])->assertForbidden();
-    $this->get(route('advances.employees.edit', $employee))->assertForbidden();
+    $this->get(route('advances.employees.edit', $employee))->assertRedirectToRoute('cash-closings.index');
     $this->put(route('advances.employees.update', $employee), ['name' => 'Cambio'])->assertForbidden();
 
     expect($employee->refresh()->name)->toBe('Ana Torres');

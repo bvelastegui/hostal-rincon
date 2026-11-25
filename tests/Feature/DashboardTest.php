@@ -11,13 +11,9 @@ test('guests are redirected to the login page', function () {
     $response->assertRedirect(route('login'));
 });
 
-test('authenticated users can visit the dashboard', function () {
-    $user = User::factory()->create();
-    $this->actingAs($user);
-
-    $this->withoutVite()->get(route('dashboard'))
-        ->assertOk()
-        ->assertInertia(fn (Assert $page) => $page->where('pendingSettings', []));
+test('los empleados sin turno son enviados a la caja desde el panel', function () {
+    $this->actingAs(User::factory()->create())->get(route('dashboard'))
+        ->assertRedirectToRoute('cash-closings.index');
 });
 
 test('el panel muestra solo la configuración inicial pendiente para la administradora', function () {

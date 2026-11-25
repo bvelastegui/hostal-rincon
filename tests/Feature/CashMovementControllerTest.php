@@ -5,6 +5,7 @@ use App\Models\Bank;
 use App\Models\BankAccount;
 use App\Models\CashMovement;
 use App\Models\CashOpening;
+use App\Models\CashShift;
 use App\Models\User;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -24,6 +25,7 @@ test('registra un cobro en efectivo y un egreso una sola vez al guardar', functi
     CashOpening::query()->update(['opening_balance_cents' => 5000]);
     Advance::factory()->create(['amount_cents' => 1300]);
     Advance::factory()->create(['amount_cents' => 2000, 'cash_opening_id' => 1, 'deducted_at' => now()]);
+    openMovementShift($operator);
     $this->actingAs($operator);
 
     $income = [
@@ -77,7 +79,14 @@ test('registra un cobro en efectivo y un egreso una sola vez al guardar', functi
         ->where('balances.cash', 11520)
         ->where('balances.total', 11520)
         ->has('movements.data', 2));
-    $this->get(route('movements.index', ['date' => '2000-01-01']))->assertInertia(fn (Assert $page) => $page
+    $this->get(route('movements.index', ['kind' => 'expense', 'recorded_by' => $operator->id, 'status' => 'confirmed', 'source' => 'cash']))
+        ->assertInertia(fn (Assert $page) => $page->has('movements.data', 1)
+            ->where('movements.data.0.kind', 'expense')
+            ->where('filterOptions.recorders.0.id', $operator->id));
+    $this->get(route('movements.index', ['recorded_by' => $responsible->id]))
+        ->assertInertia(fn (Assert $page) => $page->has('movements.data', 0));
+    $this->actingAs(User::factory()->create(['is_admin' => true]))
+        ->get(route('movements.index', ['date' => '2000-01-01']))->assertInertia(fn (Assert $page) => $page
         ->where('date', '2000-01-01')->has('movements.data', 0));
 });
 
@@ -89,6 +98,7 @@ test('valida el voucher por banco de origen y acredita a la cuenta de destino', 
     $destination = Bank::factory()->create();
     $account = BankAccount::factory()->for($destination)->create(['opening_balance_cents' => 500]);
     $anotherAccount = BankAccount::factory()->create();
+    openMovementShift($user);
     $this->actingAs($user);
 
     $receipt = [
@@ -109,6 +119,12 @@ test('valida el voucher por banco de origen y acredita a la cuenta de destino', 
         ->where('balances.bank', 500)
         ->where('movements.data.0.originBankName', $origin->name)
         ->where('movements.data.0.accountBankName', $destination->name));
+    $this->get(route('movements.index', ['status' => 'pending', 'source' => 'bank:'.$account->id]))
+        ->assertInertia(fn (Assert $page) => $page->has('movements.data', 1)
+            ->where('filterOptions.accounts.0.id', $account->id)
+            ->where('filters.source', 'bank:'.$account->id));
+    $this->get(route('movements.index', ['source' => 'cash']))
+        ->assertInertia(fn (Assert $page) => $page->has('movements.data', 0));
     $this->get(route('movements.edit', $movement))->assertInertia(fn (Assert $page) => $page
         ->where('movement.originBankName', $origin->name)
         ->where('movement.accountBankName', $destination->name));
@@ -150,6 +166,7 @@ test('registra egresos bancarios con el usuario de sesión y resta solo de la cu
     $anotherUser = User::factory()->create();
     $account = BankAccount::factory()->create(['opening_balance_cents' => 5000]);
     CashOpening::query()->update(['opening_balance_cents' => 10000]);
+    openMovementShift($operator);
     $this->actingAs($operator);
 
     $expense = [
@@ -225,6 +242,13 @@ test('traslada efectivo a tránsito y luego a banco sin variar el total ni dupli
         ->where('balances.total', 26000)
         ->has('movements.data', 0)
         ->where('depositsInTransit.0.id', $movement->id));
+    $this->get(route('movements.index', ['kind' => 'deposit', 'status' => 'in_transit', 'source' => 'cash']))
+        ->assertInertia(fn (Assert $page) => $page->has('movements.data', 0)
+            ->where('depositsInTransit.0.id', $movement->id));
+    $this->get(route('movements.index', ['kind' => 'income']))
+        ->assertInertia(fn (Assert $page) => $page->has('depositsInTransit', 0));
+    $this->get(route('movements.index', ['kind' => 'deposit', 'date_from' => '2000-01-01', 'date_to' => '2000-01-02']))
+        ->assertInertia(fn (Assert $page) => $page->has('depositsInTransit', 0));
 
     $confirmation = ['bank_account_id' => $account->id, 'voucher' => 'DEP-01'];
     $this->patch(route('movements.update', $movement), ['voucher' => 'DEP-01'])->assertSessionHasErrors('bank_account_id');
@@ -261,6 +285,7 @@ test('solo la administradora puede consultar y gestionar depósitos y devolucion
     $operator = User::factory()->create();
     $account = BankAccount::factory()->create(['opening_balance_cents' => 1000]);
     CashOpening::query()->update(['opening_balance_cents' => 10000]);
+    openMovementShift($operator);
 
     $this->actingAs($administrator)->post(route('movements.store'), [
         'request_id' => (string) Str::uuid(),
@@ -312,7 +337,7 @@ test('solo la administradora puede consultar y gestionar depósitos y devolucion
 });
 
 test('valida montos y requiere apertura de caja para contabilizar efectivo', function () {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(User::factory()->create(['is_admin' => true]));
     $receipt = [
         'request_id' => (string) Str::uuid(),
         'kind' => 'income',
@@ -328,7 +353,9 @@ test('valida montos y requiere apertura de caja para contabilizar efectivo', fun
 });
 
 test('permite crear y confirmar en un solo paso con una apertura de cero', function () {
-    $this->actingAs(User::factory()->create());
+    $operator = User::factory()->create();
+    openMovementShift($operator);
+    $this->actingAs($operator);
     CashOpening::query()->update(['opening_balance_cents' => 0]);
     $receipt = [
         'request_id' => (string) Str::uuid(),
@@ -343,3 +370,98 @@ test('permite crear y confirmar en un solo paso con una apertura de cero', funct
     $this->assertDatabaseCount('cash_movements', 1);
     $this->get(route('movements.index'))->assertInertia(fn (Assert $page) => $page->where('balances.cash', 1575));
 });
+
+test('solo el propietario de un turno operativo y la administradora pueden registrar movimientos', function () {
+    $owner = User::factory()->create();
+    $other = User::factory()->create();
+    $admin = User::factory()->create(['is_admin' => true]);
+    CashOpening::query()->update(['opening_balance_cents' => 20000]);
+    $data = [
+        'request_id' => (string) Str::uuid(),
+        'kind' => 'income',
+        'payment_method' => 'cash',
+        'description' => 'Pago en recepción',
+        'amount' => '5',
+    ];
+
+    $this->actingAs($other)->post(route('movements.store'), $data)->assertForbidden();
+    $shift = openMovementShift($owner);
+    $this->get(route('movements.create'))->assertRedirectToRoute('cash-closings.index');
+    $this->post(route('movements.store'), $data)->assertForbidden();
+
+    $this->actingAs($owner)->post(route('movements.store'), $data)->assertSessionHasNoErrors();
+    expect(CashMovement::query()->sole()->cash_shift_id)->toBe($shift->id);
+    $shift->update(['delivered_cash_cents' => 20500]);
+
+    $next = [...$data, 'request_id' => (string) Str::uuid()];
+    $this->post(route('movements.store'), $next)->assertForbidden();
+    $this->actingAs($admin)->post(route('movements.store'), $next)->assertSessionHasNoErrors();
+    expect(CashMovement::query()->latest('id')->firstOrFail()->cash_shift_id)->toBeNull();
+});
+
+test('aísla los movimientos por turno aunque el operador haya trabajado en el turno anterior', function () {
+    $operator = User::factory()->create();
+    $admin = User::factory()->create(['is_admin' => true]);
+    $origin = Bank::factory()->create();
+    $destination = BankAccount::factory()->create();
+    CashOpening::query()->update(['opening_balance_cents' => 20000]);
+    $historical = openMovementShift($operator);
+
+    $receipt = [
+        'request_id' => (string) Str::uuid(),
+        'kind' => 'income',
+        'payment_method' => 'transfer',
+        'description' => 'Transferencia de otro turno',
+        'amount' => '15',
+        'origin_bank_id' => $origin->id,
+        'bank_account_id' => $destination->id,
+    ];
+    $this->actingAs($operator)->post(route('movements.store'), $receipt)->assertSessionHasNoErrors();
+    $oldMovement = CashMovement::query()->sole();
+    $historical->update(['ended_at' => now()]);
+
+    $shift = openMovementShift($operator);
+    $this->post(route('movements.store'), [
+        ...$receipt,
+        'request_id' => (string) Str::uuid(),
+        'description' => 'Transferencia del turno en curso',
+    ])->assertSessionHasNoErrors();
+    $shiftMovement = CashMovement::query()->where('cash_shift_id', $shift->id)->sole();
+    CashMovement::query()->whereKey($shiftMovement->id)
+        ->update(['occurred_on' => now('America/Guayaquil')->subDay()->toDateString()]);
+
+    $this->get(route('movements.index', ['date' => now('America/Guayaquil')->toDateString()]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('date', null)->where('shiftId', $shift->id)
+            ->has('movements.data', 1)->where('movements.data.0.id', $shiftMovement->id));
+    $this->get(route('movements.edit', $oldMovement))->assertNotFound();
+    $this->patch(route('movements.update', $oldMovement), ['voucher' => 'V-01'])->assertNotFound();
+    $this->get(route('movements.edit', $shiftMovement))->assertOk();
+
+    $this->actingAs(User::factory()->create())->get(route('movements.index'))
+        ->assertRedirectToRoute('cash-closings.index');
+
+    $this->actingAs($admin)->get(route('movements.index'))
+        ->assertInertia(fn (Assert $page) => $page->has('movements.data', 1)
+            ->where('movements.data.0.id', $oldMovement->id));
+    $today = now('America/Guayaquil')->toDateString();
+    $yesterday = now('America/Guayaquil')->subDay()->toDateString();
+    $this->get(route('movements.index', ['date_from' => $yesterday, 'date_to' => $today, 'kind' => 'income']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('dateRange.from', $yesterday)->where('dateRange.to', $today)
+            ->has('movements.data', 2));
+    $this->get(route('movements.index', ['date_from' => $today, 'date_to' => $yesterday]))
+        ->assertSessionHasErrors('date_to');
+    $this->get(route('movements.edit', $oldMovement))->assertOk();
+    $this->patch(route('movements.update', $oldMovement), ['voucher' => 'V-01'])->assertSessionHasNoErrors();
+});
+
+function openMovementShift(User $owner): CashShift
+{
+    return CashShift::query()->create([
+        'responsible_id' => $owner->id,
+        'responsible_name' => $owner->name,
+        'started_by' => $owner->id,
+        'started_at' => now(),
+    ]);
+}

@@ -2,14 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\CalculateCashBalances;
 use App\Http\Requests\ConfirmCashMovementRequest;
 use App\Http\Requests\StoreCashMovementRequest;
-use App\Models\Advance;
 use App\Models\Bank;
 use App\Models\BankAccount;
 use App\Models\CashMovement;
 use App\Models\CashOpening;
+use App\Models\CashShift;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,35 +26,114 @@ class CashMovementController extends Controller
 {
     private const array BANK_RELATIONS = ['voucherBank:id,name', 'bankAccount:id,bank_id,name', 'bankAccount.bank:id,name'];
 
-    public function index(Request $request): Response
+    public function index(Request $request, CalculateCashBalances $calculateCashBalances): Response
     {
-        $filters = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']]);
-        $date = $filters['date'] ?? now('America/Guayaquil')->toDateString();
+        $user = $request->user();
         $canManageDeposits = Gate::allows('manage-deposits');
+        $filters = $request->validate([
+            'date' => [$canManageDeposits ? 'nullable' : 'exclude', 'date_format:Y-m-d'],
+            'date_from' => $canManageDeposits ? ['nullable', 'required_with:date_to', 'date_format:Y-m-d'] : ['exclude'],
+            'date_to' => $canManageDeposits ? ['nullable', 'required_with:date_from', 'date_format:Y-m-d', 'after_or_equal:date_from'] : ['exclude'],
+            'kind' => ['nullable', 'in:income,expense,deposit'],
+            'recorded_by' => ['nullable', 'integer', 'min:1'],
+            'status' => ['nullable', 'in:pending,confirmed,in_transit,returned'],
+            'source' => ['nullable', 'regex:/^(cash|bank:[1-9][0-9]{0,17})$/'],
+        ], [], ['date_from' => 'fecha inicial', 'date_to' => 'fecha final']);
+        $date = $canManageDeposits ? ($filters['date_from'] ?? $filters['date'] ?? now('America/Guayaquil')->toDateString()) : null;
+        $dateTo = $filters['date_to'] ?? $date;
+        $explicitRange = isset($filters['date_from']);
+        $shift = CashShift::active();
+        $restriction = CashShift::movementRestriction($user, $shift);
+        $visibleShiftId = $restriction === null ? $shift?->id : null;
+        $scope = CashMovement::query();
+
+        if (! $canManageDeposits) {
+            $scope->where('cash_shift_id', $visibleShiftId ?? 0)->where('kind', '!=', 'deposit');
+        }
+
+        $filtered = $this->filterMovements(clone $scope, $filters);
+
+        if ($explicitRange) {
+            $filtered->whereBetween('occurred_on', [$date, $dateTo]);
+        }
+
+        $records = clone $filtered;
+
+        if ($date !== null) {
+            if (! $explicitRange) {
+                $records->where('occurred_on', $date);
+            }
+
+            $records->where(fn ($query) => $query
+                ->where('kind', '!=', 'deposit')->orWhereNotNull('confirmed_at')->orWhereNotNull('returned_at'));
+        }
 
         return Inertia::render('CashMovements', [
             'date' => $date,
+            'dateRange' => $date === null ? null : ['from' => $date, 'to' => $dateTo, 'explicit' => $explicitRange],
+            'shiftId' => $canManageDeposits ? null : $visibleShiftId,
             'canManageDeposits' => $canManageDeposits,
-            'balances' => $this->balances($canManageDeposits),
-            'movements' => CashMovement::query()->where('occurred_on', $date)
-                ->where(function ($query) use ($canManageDeposits): void {
-                    $query->where('kind', '!=', 'deposit');
-
-                    if ($canManageDeposits) {
-                        $query->orWhereNotNull('confirmed_at')->orWhereNotNull('returned_at');
-                    }
-                })
+            'movementRestriction' => $restriction,
+            'filters' => [
+                'kind' => $filters['kind'] ?? null,
+                'recorded_by' => isset($filters['recorded_by']) ? (int) $filters['recorded_by'] : null,
+                'status' => $filters['status'] ?? null,
+                'source' => $filters['source'] ?? null,
+            ],
+            'filterOptions' => [
+                'recorders' => User::query()->whereIn('id', (clone $scope)->select('recorded_by'))
+                    ->orderBy('name')->get(['id', 'name']),
+                'accounts' => BankAccount::query()->whereIn('id', (clone $scope)->select('bank_account_id'))
+                    ->with('bank:id,name')->orderBy('name')->get(['id', 'bank_id', 'name'])
+                    ->map(fn (BankAccount $account): array => ['id' => $account->id, 'name' => $account->bank->name.' · '.$account->name]),
+            ],
+            'balances' => $calculateCashBalances->handle($canManageDeposits),
+            'movements' => $records
                 ->with(self::BANK_RELATIONS)
                 ->latest('id')->paginate(20)->withQueryString()->through($this->movementData(...)),
             'depositsInTransit' => $canManageDeposits
-                ? CashMovement::query()->where('kind', 'deposit')->whereNull('confirmed_at')->whereNull('returned_at')
+                ? $filtered->where('kind', 'deposit')->whereNull('confirmed_at')->whereNull('returned_at')
                     ->with(self::BANK_RELATIONS)->oldest('id')->get()->map($this->movementData(...))
                 : [],
         ]);
     }
 
+    /**
+     * @param  Builder<CashMovement>  $query
+     * @param  array<string, mixed>  $filters
+     * @return Builder<CashMovement>
+     */
+    private function filterMovements(Builder $query, array $filters): Builder
+    {
+        if (isset($filters['kind'])) {
+            $query->where('kind', $filters['kind']);
+        }
+
+        if (isset($filters['recorded_by'])) {
+            $query->where('recorded_by', $filters['recorded_by']);
+        }
+
+        $source = $filters['source'] ?? null;
+        if ($source === 'cash') {
+            $query->where('payment_method', 'cash');
+        } elseif (is_string($source)) {
+            $query->where('bank_account_id', (int) substr($source, 5));
+        }
+
+        return match ($filters['status'] ?? null) {
+            'confirmed' => $query->whereNotNull('confirmed_at')->whereNull('returned_at'),
+            'returned' => $query->whereNotNull('returned_at'),
+            'pending' => $query->where('kind', '!=', 'deposit')->whereNull('confirmed_at')->whereNull('returned_at'),
+            'in_transit' => $query->where('kind', 'deposit')->whereNull('confirmed_at')->whereNull('returned_at'),
+            default => $query,
+        };
+    }
+
     public function create(Request $request): Response
     {
+        $restriction = CashShift::movementRestriction($request->user(), CashShift::active());
+        abort_if($restriction !== null, 403, $restriction ?? '');
+
         $kind = $request->validate(['kind' => ['nullable', 'in:income,expense,deposit']])['kind'] ?? 'income';
 
         if ($kind === 'deposit') {
@@ -69,8 +150,14 @@ class CashMovementController extends Controller
         ]);
     }
 
-    public function edit(CashMovement $movement): Response|RedirectResponse
+    public function edit(Request $request, CashMovement $movement): Response|RedirectResponse
     {
+        $user = $request->user();
+        $shift = CashShift::active();
+        $restriction = CashShift::movementRestriction($user, $shift);
+        abort_if($restriction !== null, 403, $restriction ?? '');
+        $this->ensureMovementInShift($user, $shift, $movement);
+
         if ($movement->kind === 'deposit') {
             Gate::authorize('manage-deposits');
         }
@@ -114,10 +201,12 @@ class CashMovementController extends Controller
 
         try {
             $movement = DB::transaction(function () use ($attributes, $confirm, $data, $fingerprint, $user): CashMovement {
+                CashOpening::query()->lockForUpdate()->sole();
                 $requestId = ['request_id' => $data['request_id']];
                 $movement = CashMovement::query()->where($requestId)->first();
 
                 if ($movement === null) {
+                    $shift = $this->authorizeMovement($user);
                     $account = $attributes['bank_account_id'] === null
                         ? null
                         : $this->activeBankAccount($attributes['bank_account_id']);
@@ -140,6 +229,7 @@ class CashMovementController extends Controller
                         'bank_id' => $attributes['bank_id'] ?? $account?->bank_id,
                         'occurred_on' => now('America/Guayaquil')->toDateString(),
                         'recorded_by' => $user->id,
+                        'cash_shift_id' => $shift?->id,
                         'recorder_name' => $user->name,
                         'responsible_name' => $responsible?->name,
                     ]);
@@ -183,7 +273,10 @@ class CashMovementController extends Controller
 
         try {
             DB::transaction(function () use ($movement, $user, $voucher, $accountId): void {
+                CashOpening::query()->lockForUpdate()->sole();
+                $shift = $this->authorizeMovement($user);
                 $lockedMovement = CashMovement::query()->lockForUpdate()->findOrFail($movement->id);
+                $this->ensureMovementInShift($user, $shift, $lockedMovement);
 
                 if ($lockedMovement->returned_at !== null) {
                     throw ValidationException::withMessages(['movement' => 'El efectivo de este retiro ya volvió a caja.']);
@@ -206,6 +299,7 @@ class CashMovementController extends Controller
         abort_unless($movement->kind === 'deposit', 404);
 
         DB::transaction(function () use ($movement, $request): void {
+            CashOpening::query()->lockForUpdate()->sole();
             $lockedMovement = CashMovement::query()->lockForUpdate()->findOrFail($movement->id);
 
             if ($lockedMovement->confirmed_at !== null) {
@@ -263,6 +357,23 @@ class CashMovementController extends Controller
         return $opening;
     }
 
+    private function authorizeMovement(User $user): ?CashShift
+    {
+        $shift = CashShift::active();
+        $restriction = CashShift::movementRestriction($user, $shift);
+
+        if ($restriction !== null) {
+            throw ValidationException::withMessages(['movement' => $restriction]);
+        }
+
+        return $shift?->delivered_cash_cents === null ? $shift : null;
+    }
+
+    private function ensureMovementInShift(User $user, ?CashShift $shift, CashMovement $movement): void
+    {
+        abort_if(! $user->is_admin && ($shift === null || $movement->cash_shift_id !== $shift->id), 404);
+    }
+
     private function activeBankAccount(int $id): BankAccount
     {
         $account = BankAccount::query()->lockForUpdate()->findOrFail($id);
@@ -288,46 +399,12 @@ class CashMovementController extends Controller
         return array_values($accounts);
     }
 
-    /** @return array{cash: int|null, bank: int, transit: int|null, total: int|null} */
-    private function balances(bool $includeTransit): array
-    {
-        return DB::transaction(function () use ($includeTransit): array {
-            $opening = CashOpening::query()->sole();
-            $totals = CashMovement::query()->whereNull('returned_at')
-                ->selectRaw('kind, payment_method,
-                    SUM(CASE WHEN confirmed_at IS NOT NULL THEN amount_cents ELSE 0 END) as confirmed_cents,
-                    SUM(CASE WHEN confirmed_at IS NULL THEN amount_cents ELSE 0 END) as pending_cents')
-                ->groupBy('kind', 'payment_method')->get()
-                ->mapWithKeys(fn (CashMovement $movement): array => [
-                    $movement->kind.':'.$movement->payment_method => [
-                        'confirmed' => (int) $movement->getAttribute('confirmed_cents'),
-                        'pending' => (int) $movement->getAttribute('pending_cents'),
-                    ],
-                ]);
-
-            $confirmed = fn (string $key): int => $totals->get($key)['confirmed'] ?? 0;
-            $deposited = $confirmed('deposit:cash');
-            $transit = $totals->get('deposit:cash')['pending'] ?? 0;
-            $bank = (int) BankAccount::query()->sum('opening_balance_cents')
-                + $confirmed('income:transfer') - $confirmed('expense:transfer') + $deposited;
-            $cash = $opening->opening_balance_cents === null ? null : $opening->opening_balance_cents
-                + $confirmed('income:cash') - $confirmed('expense:cash') - $deposited - $transit
-                - (int) Advance::query()->where('cash_opening_id', $opening->id)->sum('amount_cents');
-
-            return [
-                'cash' => $cash,
-                'bank' => $bank,
-                'transit' => $includeTransit ? $transit : null,
-                'total' => $cash === null ? null : $cash + $bank + ($includeTransit ? $transit : 0),
-            ];
-        }, attempts: 3);
-    }
-
     /** @return array<string, mixed> */
     private function movementData(CashMovement $movement): array
     {
         return [
             'id' => $movement->id,
+            'shiftId' => $movement->cash_shift_id,
             'kind' => $movement->kind,
             'paymentMethod' => $movement->payment_method,
             'amountCents' => $movement->amount_cents,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -14,8 +14,10 @@ import {
 } from '@/components/ui/sidebar';
 import { useMainNavigation } from '@/composables/useMainNavigation';
 import { dashboard } from '@/routes';
+import { index as cashShift } from '@/routes/cash-closings';
 
 const mainNavItems = useMainNavigation();
+const page = usePage();
 </script>
 
 <template>
@@ -24,7 +26,13 @@ const mainNavItems = useMainNavigation();
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
-                        <Link :href="dashboard()">
+                        <Link
+                            :href="
+                                page.props.auth.cashShiftAccess
+                                    ? cashShift()
+                                    : dashboard()
+                            "
+                        >
                             <AppLogo />
                         </Link>
                     </SidebarMenuButton>

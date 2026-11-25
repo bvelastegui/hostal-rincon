@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 import { LogOut, Settings } from '@lucide/vue';
 import {
     DropdownMenuGroup,
@@ -17,6 +17,7 @@ type Props = {
 };
 
 defineProps<Props>();
+const page = usePage();
 </script>
 
 <template>
@@ -26,7 +27,7 @@ defineProps<Props>();
         </div>
     </DropdownMenuLabel>
     <DropdownMenuSeparator />
-    <DropdownMenuGroup>
+    <DropdownMenuGroup v-if="!page.props.auth.cashShiftAccess">
         <DropdownMenuItem :as-child="true">
             <Link class="block w-full cursor-pointer" :href="edit()" prefetch>
                 <Settings class="mr-2 h-4 w-4" />
@@ -34,7 +35,7 @@ defineProps<Props>();
             </Link>
         </DropdownMenuItem>
     </DropdownMenuGroup>
-    <DropdownMenuSeparator />
+    <DropdownMenuSeparator v-if="!page.props.auth.cashShiftAccess" />
     <DropdownMenuItem :as-child="true">
         <LogoutLink class="w-full cursor-pointer" data-test="logout-button">
             <LogOut class="mr-2 h-4 w-4" />
