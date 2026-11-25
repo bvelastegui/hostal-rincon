@@ -330,7 +330,7 @@ class CashClosingController extends Controller
             },
         ]);
 
-        return to_route('cash-closings.index');
+        return to_route($type === 'receipt' ? 'movements.index' : 'cash-closings.index');
     }
 
     private function openShift(User $responsible, int $startedBy, int $cash): CashShift

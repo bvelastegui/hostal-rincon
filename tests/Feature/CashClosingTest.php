@@ -192,8 +192,11 @@ test('la persona entrante confirma el relevo y la diferencia queda en el turno s
     $data['note'] = 'Revisado al recibir el turno';
     foreach ([1, 2] as $_) {
         $this->post(route('cash-closings.receive-shift'), $data)
-            ->assertRedirectToRoute('cash-closings.index')->assertSessionHasNoErrors();
+            ->assertRedirectToRoute('movements.index')->assertSessionHasNoErrors();
     }
+
+    $this->withoutVite()->get(route('movements.index'))->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->component('CashMovements'));
 
     $this->assertDatabaseCount('cash_closings', 2);
     $this->assertDatabaseHas('cash_closings', [
