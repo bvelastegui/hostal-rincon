@@ -33,7 +33,7 @@ const selectedLabel = computed(() =>
                 type="button"
                 variant="outline"
                 size="sm"
-                class="min-h-10 border-dashed"
+                class="min-h-10 max-w-full border-dashed"
                 :disabled="disabled"
             >
                 <CirclePlus data-icon="inline-start" aria-hidden="true" />
@@ -41,10 +41,10 @@ const selectedLabel = computed(() =>
                 <Badge
                     v-if="selectedLabel"
                     variant="secondary"
-                    class="max-w-28 truncate"
+                    class="max-w-40 min-w-0"
                     :title="selectedLabel"
                 >
-                    {{ selectedLabel }}
+                    <span class="truncate">{{ selectedLabel }}</span>
                 </Badge>
             </Button>
         </DropdownMenuTrigger>

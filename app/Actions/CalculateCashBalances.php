@@ -10,6 +10,7 @@ use App\Models\CashOpening;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 final class CalculateCashBalances
 {
@@ -62,6 +63,24 @@ final class CalculateCashBalances
         $totals = $this->movementTotals(CashMovement::query()->where('bank_account_id', $account->id))->get();
 
         return $account->opening_balance_cents + $this->bankChange($totals);
+    }
+
+    public function ensureFundsAvailable(int $amountCents, ?BankAccount $account): void
+    {
+        $balanceCents = $account === null
+            ? $this->handle(includeTransit: true)['cash']
+            : $this->bankAccountBalance($account);
+
+        if ($balanceCents === null) {
+            throw ValidationException::withMessages(['amount' => 'La administradora debe registrar el saldo inicial de efectivo.']);
+        }
+
+        if ($amountCents > $balanceCents) {
+            $available = number_format(max(0, $balanceCents) / 100, 2, ',', '.');
+            $source = $account === null ? 'en caja' : 'en la cuenta seleccionada';
+
+            throw ValidationException::withMessages(['amount' => "El monto supera el saldo disponible {$source}: USD {$available}."]);
+        }
     }
 
     /**

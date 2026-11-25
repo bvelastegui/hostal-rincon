@@ -102,7 +102,7 @@ class CashClosingController extends Controller
             'historyResponsibles' => User::query()->whereIn('id', CashShift::query()
                 ->whereIn('id', CashClosing::query()->select('cash_shift_id'))->select('responsible_id'))
                 ->orderBy('name')->get(['id', 'name']),
-            'closings' => $query->latest('id')->simplePaginate(15)->withQueryString()->through(fn (CashClosing $closing): array => [
+            'closings' => $query->latest('id')->paginate(self::TABLE_PAGE_SIZE)->onEachSide(1)->withQueryString()->through(fn (CashClosing $closing): array => [
                 'id' => $closing->id,
                 'shiftId' => $closing->cash_shift_id,
                 'responsible' => $closing->cashShift?->responsible_name,

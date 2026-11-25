@@ -17,6 +17,7 @@ import type {
     CashMovement,
     MovementRow,
 } from '@/types/cash-movement';
+import type { DataTablePage } from '@/types/data-table';
 
 const props = defineProps<{
     date: string | null;
@@ -25,7 +26,7 @@ const props = defineProps<{
     canManageDeposits: boolean;
     movementRestriction: string | null;
     balances: CashBalances;
-    depositsInTransit: CashMovement[];
+    depositsInTransit: DataTablePage<CashMovement> | null;
     filters: {
         kind: string | null;
         recorded_by: number | null;
@@ -36,11 +37,7 @@ const props = defineProps<{
         recorders: { id: number; name: string }[];
         accounts: { id: number; name: string }[];
     };
-    movements: {
-        data: MovementRow[];
-        prev_page_url: string | null;
-        next_page_url: string | null;
-    };
+    movements: DataTablePage<MovementRow> | { data: MovementRow[] };
 }>();
 
 defineOptions({
@@ -297,7 +294,7 @@ const balances = computed(() => [
         </div>
 
         <section
-            v-if="depositsInTransit.length"
+            v-if="depositsInTransit?.total"
             aria-labelledby="transit-list"
             class="flex flex-col gap-3"
         >
@@ -306,20 +303,24 @@ const balances = computed(() => [
             </h2>
             <CashMovementList
                 class="lg:hidden"
-                :movements="depositsInTransit"
+                :movements="depositsInTransit.data"
                 show-date
             />
             <div class="hidden lg:block">
                 <CashMovementsTable
                     caption="Depósitos en tránsito"
-                    :movements="depositsInTransit"
+                    :movements="depositsInTransit.data"
                     show-date
                 />
             </div>
+            <DataTablePagination
+                label="Páginas de depósitos en tránsito"
+                :page="depositsInTransit"
+            />
         </section>
 
         <section
-            v-if="filters.status !== 'in_transit' || !depositsInTransit.length"
+            v-if="filters.status !== 'in_transit' || !depositsInTransit?.total"
             aria-labelledby="movements-list"
             class="flex flex-col gap-3"
         >
@@ -366,9 +367,9 @@ const balances = computed(() => [
             </p>
 
             <DataTablePagination
+                v-if="'total' in movements"
                 label="Páginas de movimientos"
-                :previous="movements.prev_page_url"
-                :next="movements.next_page_url"
+                :page="movements"
             />
         </section>
     </div>

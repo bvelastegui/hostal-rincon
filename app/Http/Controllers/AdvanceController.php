@@ -32,6 +32,7 @@ class AdvanceController extends Controller
             'employee' => ['nullable', 'integer', 'exists:users,id'],
             'status' => ['nullable', 'in:pending,deducted'],
             'month' => ['nullable', 'date_format:Y-m'],
+            'payment_method' => ['nullable', 'in:cash,transfer'],
         ]);
 
         $employees = User::query()->operators()->orderBy('name')
@@ -46,10 +47,13 @@ class AdvanceController extends Controller
                 ->where('issued_on', '<', Carbon::createFromFormat('!Y-m', $month)->addMonth()->startOfMonth()->toDateString()))
             ->when(($filters['status'] ?? null) === 'pending', fn (Builder $query) => $query->pending())
             ->when(($filters['status'] ?? null) === 'deducted', fn (Builder $query) => $query->whereNotNull('deducted_at'))
+            ->when(($filters['payment_method'] ?? null) === 'cash', fn (Builder $query) => $query->where(fn (Builder $query) => $query
+                ->whereNull('cash_movement_id')->orWhereRelation('cashMovement', 'payment_method', 'cash')))
+            ->when(($filters['payment_method'] ?? null) === 'transfer', fn (Builder $query) => $query->whereRelation('cashMovement', 'payment_method', 'transfer'))
             ->with(['cashMovement:id,payment_method,bank_account_id,voucher', 'cashMovement.bankAccount:id,name,bank_id', 'cashMovement.bankAccount.bank:id,name'])
             ->orderByDesc('issued_on')->orderByDesc('id')
-            ->paginate(15, ['id', 'employee_id', 'employee_name', 'amount_cents', 'issued_on', 'responsible', 'note', 'recorder_name', 'deducted_at', 'deductor_name', 'cash_movement_id'])
-            ->withQueryString();
+            ->paginate(self::TABLE_PAGE_SIZE, ['id', 'employee_id', 'employee_name', 'amount_cents', 'issued_on', 'responsible', 'note', 'recorder_name', 'deducted_at', 'deductor_name', 'cash_movement_id'])
+            ->onEachSide(1)->withQueryString();
 
         return Inertia::render('Advances', [
             'employees' => $employees->map(fn (User $employee): array => [
@@ -192,7 +196,7 @@ class AdvanceController extends Controller
                 }
 
                 $account = $accountId === null ? null : $confirmation->activeBankAccount($accountId);
-                $this->ensureFundsAvailable($amountCents, $account, $calculateBalances);
+                $calculateBalances->ensureFundsAvailable($amountCents, $account);
                 $date = now('America/Guayaquil')->toDateString();
                 $shift = CashShift::active();
                 $movement = CashMovement::query()->create([
@@ -236,24 +240,6 @@ class AdvanceController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Adelanto registrado.']);
 
         return to_route('advances.index');
-    }
-
-    private function ensureFundsAvailable(int $amountCents, ?BankAccount $account, CalculateCashBalances $calculateBalances): void
-    {
-        $balanceCents = $account === null
-            ? $calculateBalances->handle(includeTransit: true)['cash']
-            : $calculateBalances->bankAccountBalance($account);
-
-        if ($balanceCents === null) {
-            throw ValidationException::withMessages(['amount' => 'Registra el saldo inicial de efectivo antes de entregar un adelanto en caja.']);
-        }
-
-        if ($amountCents > $balanceCents) {
-            $available = number_format(max(0, $balanceCents) / 100, 2, ',', '.');
-            $source = $account === null ? 'en caja' : 'en la cuenta seleccionada';
-
-            throw ValidationException::withMessages(['amount' => "El monto supera el saldo disponible {$source}: USD {$available}."]);
-        }
     }
 
     public function deduct(Request $request, User $employee): RedirectResponse

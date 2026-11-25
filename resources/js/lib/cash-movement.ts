@@ -1,3 +1,4 @@
+import type { BadgeVariants } from '@/components/ui/badge';
 import { formatUsd } from '@/lib/money';
 import type {
     CashMovement,
@@ -47,6 +48,13 @@ export const movementStatusLabels: Record<MovementStatus, string> = {
     in_transit: 'En tránsito',
     returned: 'Devuelto',
 };
+
+export const movementStatusVariants = {
+    confirmed: 'success',
+    pending: 'warning',
+    in_transit: 'info',
+    returned: 'secondary',
+} satisfies Record<MovementStatus, BadgeVariants['variant']>;
 
 export function movementAction(movement: MovementRow): string | null {
     if (movement.redacted || movement.confirmed || movement.returnedOn) {

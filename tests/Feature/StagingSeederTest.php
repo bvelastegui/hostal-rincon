@@ -70,7 +70,10 @@ test('carga la operación completa de staging una sola vez con credenciales sepa
 
 test('staging exige una contraseña de QA y conserva una base con movimientos previos', function () {
     app()->instance('env', 'staging');
-    config(['auth.superadmin_password' => 'qa-fixture-password']);
+    config([
+        'auth.superadmin_password' => 'qa-fixture-password',
+        'auth.staging_demo_employee_password' => null,
+    ]);
     expect(fn () => $this->seed(StagingSeeder::class))->toThrow(LogicException::class, 'STAGING_DEMO_EMPLOYEE_PASSWORD');
     $this->assertDatabaseCount('users', 0);
 

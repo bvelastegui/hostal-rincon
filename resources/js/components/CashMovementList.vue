@@ -10,6 +10,7 @@ import {
     movementLabels,
     movementMethod,
     movementStatusLabels,
+    movementStatusVariants,
 } from '@/lib/cash-movement';
 import { edit } from '@/routes/movements';
 import type { MovementRow } from '@/types/cash-movement';
@@ -116,18 +117,7 @@ withDefaults(
                 <p class="font-semibold whitespace-nowrap tabular-nums">
                     {{ movementAmount(movement) }}
                 </p>
-                <Badge
-                    v-if="
-                        movement.redacted ||
-                        movement.status === 'pending' ||
-                        movement.status === 'in_transit'
-                    "
-                    :variant="
-                        movement.status === 'confirmed'
-                            ? 'outline'
-                            : 'secondary'
-                    "
-                >
+                <Badge :variant="movementStatusVariants[movement.status]">
                     {{ movementStatusLabels[movement.status] }}
                 </Badge>
                 <Button
