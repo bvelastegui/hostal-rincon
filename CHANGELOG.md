@@ -4,6 +4,15 @@ El proyecto usa versionamiento semántico (`MAJOR.MINOR.PATCH`). Incrementa `MAJ
 
 Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la fecha en formato `AAAA-MM-DD` y etiqueta el commit de la entrega con `vMAJOR.MINOR.PATCH`.
 
+## 0.8.0 (prevista)
+
+- El historial de adelantos usa la tabla compartida en escritorio y una lista en móvil, con filtros por empleado, estado, mes y forma de pago.
+- El tema del sistema usa una paleta sky con colores semánticos para alertas, estados y errores en modo claro y oscuro.
+- Los estados de **Movimientos** usan colores semánticos y la acción de sensibilidad se muestra como un icono con tooltip.
+- Las tablas de administración muestran 10 registros por página con navegación numerada. Los operadores consultan los movimientos de su turno en una sola lista.
+- Los retiros para depósito se validan contra el efectivo disponible en caja antes de pasar a tránsito.
+- Los egresos se rechazan cuando superan el efectivo disponible en caja o el saldo de la cuenta bancaria de origen.
+
 ## 0.7.0 (prevista)
 
 - El **Panel** de la administradora muestra saldos vigentes y enlaces para revisar transferencias pendientes, depósitos en tránsito y faltantes de caja sin resolver.
