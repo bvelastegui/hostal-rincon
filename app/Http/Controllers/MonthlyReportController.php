@@ -40,6 +40,7 @@ class MonthlyReportController extends Controller
     {
         return array_values(CashMovement::query()
             ->where('kind', '!=', 'advance')
+            ->whereNull('voided_at')
             ->whereBetween('occurred_on', [$month->toDateString(), $month->endOfMonth()->toDateString()])
             ->selectRaw('kind, payment_method,
                 SUM(CASE WHEN returned_at IS NULL AND confirmed_at IS NOT NULL THEN amount_cents ELSE 0 END) AS confirmed_cents,

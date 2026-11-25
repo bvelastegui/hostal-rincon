@@ -1,5 +1,11 @@
 <script setup lang="ts" generic="Row extends { id: number | string }">
-import { FlexRender, getCoreRowModel, useVueTable } from '@tanstack/vue-table';
+import {
+    FlexRender,
+    getCoreRowModel,
+    getExpandedRowModel,
+    useVueTable,
+} from '@tanstack/vue-table';
+import { watch } from 'vue';
 import {
     Table,
     TableBody,
@@ -15,6 +21,8 @@ const props = defineProps<{
     caption: string;
     rows: Row[];
     columns: DataTableColumn<Row>[];
+    getSubRows?: (row: Row) => Row[] | undefined;
+    isInitiallyExpanded?: (row: Row) => boolean;
 }>();
 
 const table = useVueTable({
@@ -26,7 +34,30 @@ const table = useVueTable({
     },
     getRowId: (row) => String(row.id),
     getCoreRowModel: getCoreRowModel(),
+    getSubRows: (row) => props.getSubRows?.(row),
+    getExpandedRowModel: getExpandedRowModel(),
 });
+
+watch(
+    () => props.rows,
+    () => {
+        if (props.isInitiallyExpanded) {
+            table.setExpanded(
+                Object.fromEntries(
+                    table
+                        .getCoreRowModel()
+                        .flatRows.filter(
+                            (row) =>
+                                row.getCanExpand() &&
+                                props.isInitiallyExpanded?.(row.original),
+                        )
+                        .map((row) => [row.id, true]),
+                ),
+            );
+        }
+    },
+    { immediate: true },
+);
 
 function alignment(columnId: string) {
     return props.columns.find((column) => column.id === columnId)?.meta?.align;
@@ -43,6 +74,11 @@ function alignment(columnId: string) {
                     :key="header.id"
                     scope="col"
                     :colspan="header.colSpan"
+                    :style="
+                        header.column.columnDef.size === undefined
+                            ? undefined
+                            : { width: header.getSize() + 'px' }
+                    "
                     :class="{
                         'text-right': alignment(header.column.id) === 'right',
                     }"
@@ -56,7 +92,11 @@ function alignment(columnId: string) {
             </TableRow>
         </TableHeader>
         <TableBody>
-            <TableRow v-for="row in table.getRowModel().rows" :key="row.id">
+            <TableRow
+                v-for="row in table.getRowModel().rows"
+                :key="row.id"
+                :class="{ 'bg-muted/40': row.depth > 0 }"
+            >
                 <TableCell
                     v-for="cell in row.getVisibleCells()"
                     :key="cell.id"

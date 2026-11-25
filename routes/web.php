@@ -34,6 +34,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/', [CashMovementController::class, 'index'])->name('index');
         Route::get('nuevo', [CashMovementController::class, 'create'])->name('create');
         Route::post('/', [CashMovementController::class, 'store'])->name('store');
+        Route::get('{movement}/corregir', [CashMovementController::class, 'correction'])
+            ->can('correct-movements')->name('correction');
+        Route::post('{movement}/reemplazar', [CashMovementController::class, 'replace'])
+            ->can('correct-movements')->name('replace');
+        Route::patch('{movement}/anular', [CashMovementController::class, 'annul'])
+            ->can('correct-movements')->name('annul');
         Route::get('{movement}/confirmar', [CashMovementController::class, 'edit'])->name('edit');
         Route::patch('{movement}/confirmar', [CashMovementController::class, 'update'])->name('update');
         Route::patch('{movement}/sensibilidad', [CashMovementController::class, 'updateSensitivity'])

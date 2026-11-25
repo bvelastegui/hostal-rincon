@@ -47,6 +47,7 @@ export const movementStatusLabels: Record<MovementStatus, string> = {
     pending: 'Pendiente',
     in_transit: 'En tránsito',
     returned: 'Devuelto',
+    voided: 'Anulado',
 };
 
 export const movementStatusVariants = {
@@ -54,10 +55,39 @@ export const movementStatusVariants = {
     pending: 'warning',
     in_transit: 'info',
     returned: 'secondary',
+    voided: 'destructive',
 } satisfies Record<MovementStatus, BadgeVariants['variant']>;
 
+export function movementAuditLines(movement: CashMovement): string[] {
+    const lines: string[] = [];
+
+    if (movement.voidReason) {
+        lines.push(
+            `Anuló ${movement.voidedBy} · ${movement.voidedOn}`,
+            movement.voidReason,
+        );
+    }
+
+    if (movement.replacementId) {
+        lines.push(
+            `#${movement.id} · Reemplazado por #${movement.replacementId}`,
+        );
+    }
+
+    if (movement.replacesId) {
+        lines.push(`#${movement.id} · Reemplaza a #${movement.replacesId}`);
+    }
+
+    return lines;
+}
+
 export function movementAction(movement: MovementRow): string | null {
-    if (movement.redacted || movement.confirmed || movement.returnedOn) {
+    if (
+        movement.redacted ||
+        movement.confirmed ||
+        movement.returnedOn ||
+        movement.status === 'voided'
+    ) {
         return null;
     }
     return movement.kind === 'deposit' ? 'Gestionar depósito' : 'Confirmar';
