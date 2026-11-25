@@ -28,6 +28,11 @@ class BankAccount extends Model
         return $this->belongsTo(Bank::class);
     }
 
+    public function displayName(): string
+    {
+        return $this->bank->name.' · '.$this->name;
+    }
+
     /** @return array<string, string> */
     protected function casts(): array
     {

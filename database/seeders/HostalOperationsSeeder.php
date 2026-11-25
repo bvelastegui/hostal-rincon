@@ -102,14 +102,14 @@ class HostalOperationsSeeder extends Seeder
 
                 if ($offset === 1) {
                     $delayedTransfer = $this->transferIncome($operator, $shift, $day->setTime(10, 0), $main, $backup->bank_id);
-                    $this->advance($team[0], $day->setTime(11, 0), 10_000, 'Segundo adelanto del ciclo salarial');
+                    $this->advance($team[0], $day->setTime(11, 0), 10_000, 'Segundo adelanto del ciclo salarial', $main);
                     $this->advance($team[1], $day->setTime(11, 10), 15_000, 'Primer adelanto del ciclo salarial');
                 }
 
                 if ($offset === 2 && $delayedTransfer !== null) {
                     $this->confirm($delayedTransfer, $this->admin, $day->setTime(10, 0), 'DEMO-CONFIRMADO-OTRO-TURNO', $main);
                     $this->advance($team[0], $day->setTime(11, 0), 5_000, 'Completa el límite de USD 300');
-                    $this->advance($team[1], $day->setTime(11, 10), 14_999, 'Queda a un centavo del límite');
+                    $this->advance($team[1], $day->setTime(11, 10), 14_999, 'Queda a un centavo del límite', $main);
                 }
 
                 if ($offset === 4) {
@@ -124,18 +124,19 @@ class HostalOperationsSeeder extends Seeder
                 }
 
                 if ($day->isLastOfMonth() && $offset > 5) {
-                    $this->advance($incoming, $day->setTime(11, 30), 2_000, 'Adelanto de fin de mes descontado en el siguiente ciclo');
+                    $this->advance($incoming, $day->setTime(11, 30), 2_000, 'Adelanto de fin de mes descontado en el siguiente ciclo', $main);
                 }
 
                 if ($offset > 2 && $offset % 4 === 0) {
                     $this->transferIncome($operator, $shift, $day->setTime(10, 30), $main, $backup->bank_id, 'DEMO-ING-'.$offset);
                     $at = $day->setTime(12, 0);
-                    $expense = $this->movement($operator, $shift, $at, 'expense', 1_975, 'Pago bancario a proveedor', [
+                    $expense = $this->movement($this->admin, $shift, $at, 'expense', 1_975, 'Pago bancario a proveedor', [
+                        'is_sensitive' => true,
                         'payment_method' => 'transfer',
                         'bank_id' => $main->bank_id,
                         'bank_account_id' => $main->id,
                     ]);
-                    $this->confirm($expense, $operator, $at, 'DEMO-EGR-'.$offset, $main);
+                    $this->confirm($expense, $this->admin, $at, 'DEMO-EGR-'.$offset, $main);
                 }
 
                 if ($offset % 6 === 3) {
@@ -171,17 +172,18 @@ class HostalOperationsSeeder extends Seeder
 
             $operator = $team[0]->id === $shift->responsible_id ? $team[0] : $team[1];
             $this->transferIncome($operator, $shift, $now, $backup, $main->bank_id);
+            $this->transferIncome($this->admin, $shift, $now, $backup, $main->bank_id, isSensitive: true);
 
             foreach ($team as $employee) {
                 $this->deductAdvances($employee, $now);
                 $this->advance($employee, $now, 15_000, 'Primer adelanto del ciclo actual');
             }
 
-            $this->advance($team[0], $now, Advance::LIMIT_CENTS - 15_001, 'Pendiente a un centavo del límite');
-            $this->advance($team[1], $now, Advance::LIMIT_CENTS - 15_000, 'Saldo pendiente exactamente en USD 300');
+            $this->advance($team[0], $now, Advance::LIMIT_CENTS - 15_001, 'Pendiente a un centavo del límite', $main);
+            $this->advance($team[1], $now, Advance::LIMIT_CENTS - 15_000, 'Saldo pendiente exactamente en USD 300', $main);
             $this->cashMovement($operator, $shift, $now, 'income', 8_475, 'Cobro en efectivo del turno actual');
-            $this->cashMovement($this->admin, $shift, $now, 'expense', 1_280, 'Compra de insumos registrada por administración');
-            $this->deposit($operator, $shift, $now, 3_500);
+            $this->cashMovement($this->admin, $shift, $now, 'expense', 1_280, 'Compra de insumos registrada por administración', isSensitive: true);
+            $this->deposit($operator, $shift, $now, 3_500, isSensitive: true);
 
             return $team;
         });
@@ -344,20 +346,35 @@ class HostalOperationsSeeder extends Seeder
         return $counted;
     }
 
-    private function advance(User $employee, CarbonImmutable $at, int $amount, string $note): void
+    private function advance(User $employee, CarbonImmutable $at, int $amount, string $note, ?BankAccount $account = null): void
     {
         if ((int) $employee->pendingAdvances()->sum('amount_cents') + $amount > Advance::LIMIT_CENTS) {
             throw new LogicException('La simulación intentó superar el límite de adelantos.');
         }
 
-        $needed = $amount - $this->cash();
-        if ($needed > 0) {
-            $this->cashMovement($this->admin, CashShift::active(), $at, 'income', $needed, 'Cobros en efectivo antes de entregar un adelanto');
+        $shift = CashShift::active();
+        if ($account === null) {
+            $needed = $amount - $this->cash();
+
+            if ($needed > 0) {
+                $this->cashMovement($this->admin, $shift, $at, 'income', $needed, 'Cobro de hospedaje en efectivo');
+            }
+        } elseif ($amount > $this->balances->bankAccountBalance($account)) {
+            throw new LogicException('La cuenta de demostración no tiene saldo para el adelanto.');
         }
+
+        $movement = $this->movement($this->admin, $shift, $at, 'advance', $amount, 'Adelanto de sueldo · '.$employee->name, [
+            'is_sensitive' => true,
+            'payment_method' => $account === null ? 'cash' : 'transfer',
+            'bank_id' => $account?->bank_id,
+            'bank_account_id' => $account?->id,
+        ]);
+        $this->confirm($movement, $this->admin, $at, $account === null ? null : 'DEMO-ADE-'.$movement->id, $account);
 
         $employee->advances()->create([
             'request_id' => (string) Str::uuid(),
-            'cash_opening_id' => $this->opening->id,
+            'cash_opening_id' => $movement->cash_opening_id,
+            'cash_movement_id' => $movement->id,
             'employee_name' => $employee->name,
             'issued_on' => $at->toDateString(),
             'amount_cents' => $amount,
@@ -378,13 +395,14 @@ class HostalOperationsSeeder extends Seeder
         ]);
     }
 
-    private function cashMovement(User $actor, ?CashShift $shift, CarbonImmutable $at, string $kind, int $amount, string $description): void
+    private function cashMovement(User $actor, ?CashShift $shift, CarbonImmutable $at, string $kind, int $amount, string $description, bool $isSensitive = false): void
     {
         if ($kind === 'income') {
             $this->makeCashRoom($actor, $shift, $at, $amount);
         }
 
-        $this->confirm($this->movement($actor, $shift, $at, $kind, $amount, $description), $actor, $at);
+        $movement = $this->movement($actor, $shift, $at, $kind, $amount, $description, ['is_sensitive' => $isSensitive]);
+        $this->confirm($movement, $actor, $at);
         $this->cash();
     }
 
@@ -401,9 +419,10 @@ class HostalOperationsSeeder extends Seeder
         }
     }
 
-    private function transferIncome(User $actor, CashShift $shift, CarbonImmutable $at, BankAccount $account, int $originId, ?string $voucher = null): CashMovement
+    private function transferIncome(User $actor, CashShift $shift, CarbonImmutable $at, BankAccount $account, int $originId, ?string $voucher = null, bool $isSensitive = false): CashMovement
     {
         $movement = $this->movement($actor, $shift, $at, 'income', 4_750, 'Cobro por transferencia', [
+            'is_sensitive' => $isSensitive,
             'payment_method' => 'transfer',
             'bank_id' => $originId,
             'bank_account_id' => $account->id,
@@ -416,13 +435,14 @@ class HostalOperationsSeeder extends Seeder
         return $movement;
     }
 
-    private function deposit(User $responsible, ?CashShift $shift, CarbonImmutable $at, int $amount): CashMovement
+    private function deposit(User $responsible, ?CashShift $shift, CarbonImmutable $at, int $amount, bool $isSensitive = false): CashMovement
     {
         if ($amount <= 0 || $amount > $this->cash()) {
             throw new LogicException('El retiro de demostración debe ser positivo y estar cubierto por el efectivo.');
         }
 
         return $this->movement($this->admin, $shift, $at, 'deposit', $amount, 'Retiro para depósito', [
+            'is_sensitive' => $isSensitive,
             'responsible_id' => $responsible->id,
             'responsible_name' => $responsible->name,
         ]);

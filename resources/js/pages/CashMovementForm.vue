@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { Form, Head, Link } from '@inertiajs/vue3';
+import { Form, Head, Link, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import SelectField from '@/components/SelectField.vue';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Field,
     FieldDescription,
@@ -12,12 +13,13 @@ import {
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { paymentOptions } from '@/lib/cash-movement';
 import { formatUsd } from '@/lib/money';
 import { index, returnToCash, store, update } from '@/routes/movements';
 import type { CashMovement, MovementKind } from '@/types/cash-movement';
 
 const props = defineProps<{
-    kind: MovementKind;
+    kind: Exclude<MovementKind, 'advance'>;
     requestId: string | null;
     movement: CashMovement | null;
     banks: { id: number; name: string }[];
@@ -29,6 +31,7 @@ defineOptions({
     layout: { breadcrumbs: [{ title: 'Movimientos', href: index() }] },
 });
 
+const page = usePage();
 const method = ref('cash');
 const isDeposit = computed(() => props.kind === 'deposit');
 const isExpense = computed(() => props.kind === 'expense');
@@ -85,10 +88,6 @@ const userOptions = computed(() =>
         label: name,
     })),
 );
-const paymentOptions = [
-    { value: 'cash', label: 'Efectivo' },
-    { value: 'transfer', label: 'Transferencia bancaria' },
-];
 </script>
 
 <template>
@@ -239,6 +238,42 @@ const paymentOptions = [
                     :options="originOptions"
                     :error="errors.origin_bank_id"
                 />
+
+                <Field
+                    v-if="
+                        !movement &&
+                        page.props.auth.canManageMovementSensitivity
+                    "
+                    orientation="horizontal"
+                    :data-invalid="!!errors.is_sensitive"
+                >
+                    <Checkbox
+                        id="movement-sensitive"
+                        name="is_sensitive"
+                        value="1"
+                        :aria-invalid="!!errors.is_sensitive"
+                        :aria-describedby="
+                            errors.is_sensitive
+                                ? 'movement-sensitive-error'
+                                : 'movement-sensitive-description'
+                        "
+                    />
+                    <div class="flex flex-col gap-1">
+                        <FieldLabel for="movement-sensitive"
+                            >Movimiento sensible</FieldLabel
+                        >
+                        <FieldDescription id="movement-sensitive-description">
+                            El operador verá una descripción genérica, la fecha,
+                            el estado, la cuenta, el importe y quién lo
+                            registró.
+                        </FieldDescription>
+                        <FieldError
+                            v-if="errors.is_sensitive"
+                            id="movement-sensitive-error"
+                            >{{ errors.is_sensitive }}</FieldError
+                        >
+                    </div>
+                </Field>
 
                 <SelectField
                     v-if="selectAccount && banks.length"

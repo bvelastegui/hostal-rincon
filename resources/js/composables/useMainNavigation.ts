@@ -1,10 +1,17 @@
 import { usePage } from '@inertiajs/vue3';
-import { ArrowLeftRight, Clock, LayoutGrid, Wallet } from '@lucide/vue';
+import {
+    ArrowLeftRight,
+    ChartNoAxesColumn,
+    Clock,
+    LayoutGrid,
+    Wallet,
+} from '@lucide/vue';
 import { computed } from 'vue';
 import { index as advances } from '@/actions/App/Http/Controllers/AdvanceController';
 import { dashboard } from '@/routes';
 import { index as cashShift } from '@/routes/cash-closings';
 import { index as movements } from '@/routes/movements';
+import { monthly as monthlyReport } from '@/routes/reports';
 import type { NavItem } from '@/types';
 
 export function useMainNavigation() {
@@ -26,6 +33,15 @@ export function useMainNavigation() {
         { title: 'Turno', href: cashShift(), icon: Clock },
         ...(page.props.auth.canManageAdvances
             ? [{ title: 'Adelantos', href: advances(), icon: Wallet }]
+            : []),
+        ...(page.props.auth.canViewMonthlyReport
+            ? [
+                  {
+                      title: 'Reporte',
+                      href: monthlyReport(),
+                      icon: ChartNoAxesColumn,
+                  },
+              ]
             : []),
     ]);
 }

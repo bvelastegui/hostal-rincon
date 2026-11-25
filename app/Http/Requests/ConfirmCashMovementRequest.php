@@ -12,6 +12,8 @@ class ConfirmCashMovementRequest extends FormRequest
     public function authorize(): bool
     {
         $movement = $this->route('movement');
+        abort_if($movement instanceof CashMovement && ! $movement->detailsVisibleTo($this->user()), 404);
+
         $kind = $movement instanceof CashMovement ? $movement->kind : $this->input('kind');
 
         return $kind !== 'deposit' || Gate::allows('manage-deposits');

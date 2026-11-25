@@ -465,3 +465,128 @@ function openMovementShift(User $owner): CashShift
         'started_at' => now(),
     ]);
 }
+
+test('los movimientos sensibles del turno exponen únicamente los campos permitidos a operadores y bloquean los accesos directos', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $operator = User::factory()->create();
+    $otherOperator = User::factory()->create();
+    $shift = openMovementShift($operator);
+    CashOpening::query()->update(['opening_balance_cents' => 50000]);
+    $origin = Bank::factory()->create();
+    $account = BankAccount::factory()->create();
+
+    $details = [
+        'request_id' => (string) Str::uuid(),
+        'kind' => 'income',
+        'payment_method' => 'transfer',
+        'amount' => '78.25',
+        'description' => 'Cobro confidencial de prueba',
+        'origin_bank_id' => $origin->id,
+        'bank_account_id' => $account->id,
+        'voucher' => 'PRIVADO-7825',
+    ];
+    $this->actingAs($admin)->post(route('movements.store'), [...$details, 'is_sensitive' => true])
+        ->assertSessionHasNoErrors();
+    $privateMovement = CashMovement::query()->sole();
+    $reserved = [
+        'id' => $privateMovement->id,
+        'redacted' => true,
+        'kind' => 'income',
+        'recorderName' => $admin->name,
+        'amountCents' => 7825,
+        'date' => $privateMovement->occurred_on,
+        'status' => 'pending',
+        'account' => $account->displayName(),
+    ];
+
+    $this->get(route('movements.index'))->assertInertia(fn (Assert $page) => $page
+        ->where('auth.canManageMovementSensitivity', true)
+        ->where('movements.data.0.isSensitive', true)
+        ->where('movements.data.0.description', $details['description'])
+        ->where('movements.data.0.voucher', $details['voucher']));
+    $this->get(route('movements.edit', $privateMovement))->assertOk();
+
+    $this->actingAs($operator);
+    $ordinary = [
+        'request_id' => (string) Str::uuid(),
+        'kind' => 'expense',
+        'payment_method' => 'cash',
+        'amount' => '9',
+        'description' => 'Compra de insumos',
+    ];
+    $this->post(route('movements.store'), [...$ordinary, 'is_sensitive' => true])->assertSessionHasErrors('is_sensitive');
+    $this->post(route('movements.store'), $ordinary)->assertSessionHasNoErrors();
+
+    $this->get(route('movements.index'))->assertInertia(fn (Assert $page) => $page
+        ->where('auth.canManageMovementSensitivity', false)
+        ->has('movements.data', 2)
+        ->where('movements.data.0.description', $ordinary['description'])
+        ->where('movements.data.1', $reserved)
+        ->has('filterOptions.recorders', 2)
+        ->where('filterOptions.recorders', fn ($recorders) => collect($recorders)->pluck('id')->contains($admin->id))
+        ->has('filterOptions.accounts', 1)
+        ->where('filterOptions.accounts.0.id', $account->id));
+    foreach ([
+        ['kind' => 'income'],
+        ['recorded_by' => $admin->id],
+        ['status' => 'pending'],
+        ['source' => 'bank:'.$account->id],
+    ] as $filter) {
+        $this->get(route('movements.index', $filter))->assertInertia(fn (Assert $page) => $page
+            ->has('movements.data', 1)->where('movements.data.0', $reserved));
+    }
+    $this->get(route('movements.edit', $privateMovement))->assertNotFound();
+    $this->patch(route('movements.update', $privateMovement), ['voucher' => 'INTENTO'])->assertNotFound();
+    $this->patch(route('movements.update-sensitivity', $privateMovement), ['is_sensitive' => false])->assertForbidden();
+    expect($privateMovement->refresh()->confirmed_at)->toBeNull();
+
+    $this->actingAs($admin)->from(route('movements.index'))->patch(route('movements.update-sensitivity', $privateMovement), ['is_sensitive' => false])
+        ->assertRedirectToRoute('movements.index')->assertSessionHasNoErrors();
+    $this->actingAs($operator)->get(route('movements.index', ['source' => 'bank:'.$account->id]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('movements.data.0.isSensitive', false)
+            ->where('movements.data.0.description', $details['description']));
+    $this->actingAs($admin)->patch(route('movements.update-sensitivity', $privateMovement), ['is_sensitive' => true])
+        ->assertSessionHasNoErrors();
+    $shift->update(['ended_at' => now()]);
+    openMovementShift($otherOperator);
+    $this->actingAs($otherOperator)->get(route('movements.index'))
+        ->assertInertia(fn (Assert $page) => $page->has('movements.data', 0));
+});
+
+test('un depósito reservado conserva la fecha, el estado y la cuenta visible durante el turno', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $operator = User::factory()->create();
+    openMovementShift($operator);
+    CashOpening::query()->update(['opening_balance_cents' => 20000]);
+    $this->actingAs($admin)->post(route('movements.store'), [
+        'request_id' => (string) Str::uuid(),
+        'kind' => 'deposit',
+        'amount' => '65',
+        'responsible_id' => $operator->id,
+        'is_sensitive' => true,
+    ])->assertSessionHasNoErrors();
+    $deposit = CashMovement::query()->sole();
+
+    $reserved = [
+        'id' => $deposit->id,
+        'redacted' => true,
+        'kind' => 'transaction',
+        'recorderName' => $admin->name,
+        'amountCents' => 6500,
+        'date' => $deposit->occurred_on,
+        'status' => 'in_transit',
+        'account' => 'Efectivo',
+    ];
+    $this->actingAs($operator)->get(route('movements.index', ['status' => 'in_transit', 'kind' => 'transaction']))->assertInertia(fn (Assert $page) => $page
+        ->where('movements.data.0', $reserved)
+        ->has('depositsInTransit', 0));
+
+    $account = BankAccount::factory()->create();
+    $this->actingAs($admin)->patch(route('movements.update', $deposit), ['voucher' => 'DEP-65', 'bank_account_id' => $account->id])
+        ->assertSessionHasNoErrors();
+    $this->actingAs($operator)->get(route('movements.index', ['source' => 'cash']))
+        ->assertInertia(fn (Assert $page) => $page->has('movements.data', 0));
+    $this->get(route('movements.index', ['source' => 'bank:'.$account->id]))->assertInertia(fn (Assert $page) => $page
+        ->where('movements.data.0', [...$reserved, 'status' => 'confirmed', 'account' => $account->displayName()]));
+});

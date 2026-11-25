@@ -4,6 +4,7 @@ use App\Http\Controllers\AdvanceController;
 use App\Http\Controllers\CashClosingController;
 use App\Http\Controllers\CashMovementController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\MonthlyReportController;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -14,6 +15,7 @@ Route::get('/', function (Request $request): RedirectResponse {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
+    Route::get('reportes/mensual', MonthlyReportController::class)->can('view-monthly-report')->name('reports.monthly');
 
     Route::redirect('cierres-de-caja', '/turno-de-caja');
     Route::prefix('turno-de-caja')->name('cash-closings.')->group(function () {
@@ -34,6 +36,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/', [CashMovementController::class, 'store'])->name('store');
         Route::get('{movement}/confirmar', [CashMovementController::class, 'edit'])->name('edit');
         Route::patch('{movement}/confirmar', [CashMovementController::class, 'update'])->name('update');
+        Route::patch('{movement}/sensibilidad', [CashMovementController::class, 'updateSensitivity'])
+            ->can('manage-movement-sensitivity')->name('update-sensitivity');
         Route::patch('{movement}/devolver', [CashMovementController::class, 'returnToCash'])
             ->can('manage-deposits')->name('return-to-cash');
     });

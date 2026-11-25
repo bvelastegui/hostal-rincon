@@ -1,20 +1,22 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
+import CashMovementSensitivityButton from '@/components/CashMovementSensitivityButton.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
+    movementAccountRole,
     movementAction,
     movementAmount,
     movementLabels,
     movementMethod,
-    movementStatus,
+    movementStatusLabels,
 } from '@/lib/cash-movement';
 import { edit } from '@/routes/movements';
-import type { CashMovement } from '@/types/cash-movement';
+import type { MovementRow } from '@/types/cash-movement';
 
 withDefaults(
     defineProps<{
-        movements: CashMovement[];
+        movements: MovementRow[];
         showDate?: boolean;
         canManage?: boolean;
     }>(),
@@ -29,7 +31,22 @@ withDefaults(
             :key="movement.id"
             class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 py-3 sm:gap-4"
         >
-            <div class="flex min-w-0 flex-col gap-1">
+            <div v-if="movement.redacted" class="flex min-w-0 flex-col gap-1">
+                <p class="font-medium">{{ movementLabels[movement.kind] }}</p>
+                <p
+                    v-if="movement.account"
+                    class="text-xs wrap-break-word text-muted-foreground"
+                >
+                    Cuenta: {{ movement.account }}
+                </p>
+                <p class="text-xs text-muted-foreground">
+                    Fecha: {{ movement.date }}
+                </p>
+                <p class="text-xs wrap-break-word text-muted-foreground">
+                    Registró {{ movement.recorderName }}
+                </p>
+            </div>
+            <div v-else class="flex min-w-0 flex-col gap-1">
                 <p class="font-medium wrap-break-word">
                     {{ movement.description }}
                 </p>
@@ -50,8 +67,9 @@ withDefaults(
                     v-if="movement.accountBankName"
                     class="text-xs wrap-break-word text-muted-foreground"
                 >
-                    {{ movement.kind === 'expense' ? 'Origen' : 'Destino' }}:
-                    {{ movement.accountBankName }} · {{ movement.accountName }}
+                    {{ movementAccountRole(movement.kind) }}:
+                    {{ movement.accountBankName }} ·
+                    {{ movement.accountName }}
                 </p>
                 <p v-if="showDate" class="text-xs text-muted-foreground">
                     {{ movement.kind === 'deposit' ? 'Retiro del' : 'Fecha:' }}
@@ -81,6 +99,12 @@ withDefaults(
                 >
                     Responsable del efectivo: {{ movement.responsibleName }}
                 </p>
+                <p
+                    v-if="movement.isSensitive"
+                    class="text-xs text-muted-foreground"
+                >
+                    Movimiento sensible
+                </p>
                 <p class="text-xs wrap-break-word text-muted-foreground">
                     Registró {{ movement.recorderName }}
                     <template v-if="movement.shiftId">
@@ -93,15 +117,21 @@ withDefaults(
                     {{ movementAmount(movement) }}
                 </p>
                 <Badge
-                    v-if="!movement.confirmed && !movement.returnedOn"
-                    variant="secondary"
+                    v-if="
+                        movement.redacted ||
+                        movement.status === 'pending' ||
+                        movement.status === 'in_transit'
+                    "
+                    :variant="
+                        movement.status === 'confirmed'
+                            ? 'outline'
+                            : 'secondary'
+                    "
                 >
-                    {{ movementStatus(movement) }}
+                    {{ movementStatusLabels[movement.status] }}
                 </Badge>
                 <Button
-                    v-if="
-                        canManage && !movement.confirmed && !movement.returnedOn
-                    "
+                    v-if="canManage && movementAction(movement)"
                     as-child
                     variant="outline"
                     size="sm"
@@ -111,6 +141,10 @@ withDefaults(
                         {{ movementAction(movement) }}
                     </Link>
                 </Button>
+                <CashMovementSensitivityButton
+                    v-if="!movement.redacted"
+                    :movement="movement"
+                />
             </div>
         </li>
     </ul>

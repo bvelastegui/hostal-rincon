@@ -2,11 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\ConvertUsdToCents;
+use App\Actions\CalculateCashBalances;
+use App\Actions\ConfirmCashMovement;
+use App\Http\Requests\StoreAdvanceRequest;
 use App\Models\Advance;
+use App\Models\BankAccount;
+use App\Models\CashMovement;
 use App\Models\CashOpening;
+use App\Models\CashShift;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -40,8 +46,9 @@ class AdvanceController extends Controller
                 ->where('issued_on', '<', Carbon::createFromFormat('!Y-m', $month)->addMonth()->startOfMonth()->toDateString()))
             ->when(($filters['status'] ?? null) === 'pending', fn (Builder $query) => $query->pending())
             ->when(($filters['status'] ?? null) === 'deducted', fn (Builder $query) => $query->whereNotNull('deducted_at'))
+            ->with(['cashMovement:id,payment_method,bank_account_id,voucher', 'cashMovement.bankAccount:id,name,bank_id', 'cashMovement.bankAccount.bank:id,name'])
             ->orderByDesc('issued_on')->orderByDesc('id')
-            ->paginate(15, ['id', 'employee_id', 'employee_name', 'amount_cents', 'issued_on', 'responsible', 'note', 'recorder_name', 'deducted_at', 'deductor_name'])
+            ->paginate(15, ['id', 'employee_id', 'employee_name', 'amount_cents', 'issued_on', 'responsible', 'note', 'recorder_name', 'deducted_at', 'deductor_name', 'cash_movement_id'])
             ->withQueryString();
 
         return Inertia::render('Advances', [
@@ -128,74 +135,125 @@ class AdvanceController extends Controller
         return to_route('advances.index');
     }
 
-    public function create(User $employee): Response
+    public function create(User $employee, ConfirmCashMovement $confirmation, CalculateCashBalances $calculateBalances): Response
     {
         abort_if($employee->is_admin, 404);
+
+        $balances = $calculateBalances->handle(includeTransit: true, includeAccounts: true);
+        $bankBalances = array_column($balances['accounts'] ?? [], 'balanceCents', 'id');
 
         return Inertia::render('AdvanceCreate', [
             'employee' => ['id' => $employee->id, 'name' => $employee->name],
             'pendingCents' => (int) $employee->pendingAdvances()->sum('amount_cents'),
             'limitCents' => Advance::LIMIT_CENTS,
             'requestToken' => (string) Str::uuid(),
+            'cashBalanceCents' => $balances['cash'],
+            'bankAccounts' => array_map(fn (array $account): array => [
+                ...$account,
+                'balanceCents' => $bankBalances[$account['id']] ?? 0,
+            ], $confirmation->bankAccounts()),
         ]);
     }
 
-    public function store(Request $request, User $employee): RedirectResponse
+    public function store(StoreAdvanceRequest $request, User $employee, ConfirmCashMovement $confirmation, CalculateCashBalances $calculateBalances): RedirectResponse
     {
-        $data = $request->validate([
-            'request_id' => ['required', 'uuid'],
-            'amount' => ['required', 'numeric', 'decimal:0,2', 'gt:0', 'max:'.(Advance::LIMIT_CENTS / 100)],
-            'note' => ['nullable', 'string', 'max:500'],
-        ], [
-            'amount.required' => 'Ingresa el monto del adelanto.',
-            'amount.decimal' => 'Ingresa un monto con hasta dos decimales.',
-            'amount.gt' => 'El monto debe ser mayor que cero.',
-            'amount.max' => 'El monto supera el límite de adelantos.',
-        ]);
-
-        $amountCents = ConvertUsdToCents::fromDecimal((string) $data['amount']);
+        $data = $request->validated();
+        $amountCents = $request->amountCents();
         $user = $request->user();
+        $method = $data['payment_method'];
+        $accountId = isset($data['bank_account_id']) ? (int) $data['bank_account_id'] : null;
+        $voucher = $data['voucher'] ?? null;
 
-        DB::transaction(function () use ($employee, $data, $amountCents, $user): void {
-            $employee = User::query()->lockForUpdate()->operators()->findOrFail($employee->id);
-            $previous = Advance::query()->where('request_id', $data['request_id'])->first();
-            if ($previous !== null) {
-                if ($previous->employee_id === $employee->id
-                    && $previous->recorded_by === $user->id
-                    && $previous->amount_cents === $amountCents
-                    && $previous->note === ($data['note'] ?? null)) {
-                    return;
+        try {
+            DB::transaction(function () use ($employee, $confirmation, $calculateBalances, $data, $amountCents, $user, $method, $accountId, $voucher): void {
+                CashOpening::query()->lockForUpdate()->sole();
+                $employee = User::query()->lockForUpdate()->operators()->findOrFail($employee->id);
+                $previous = Advance::query()->with('cashMovement')->where('request_id', $data['request_id'])->first();
+
+                if ($previous !== null) {
+                    if ($previous->employee_id === $employee->id
+                        && $previous->recorded_by === $user->id
+                        && $previous->amount_cents === $amountCents
+                        && $previous->note === ($data['note'] ?? null)
+                        && ($previous->cashMovement->payment_method ?? 'cash') === $method
+                        && $previous->cashMovement?->bank_account_id === $accountId
+                        && $previous->cashMovement?->voucher === $voucher) {
+                        return;
+                    }
+
+                    throw ValidationException::withMessages(['request_id' => 'Esta solicitud ya se utilizó. Cierra el formulario y vuelve a abrirlo.']);
                 }
 
-                throw ValidationException::withMessages(['request_id' => 'Esta solicitud ya se utilizó. Cierra el formulario y vuelve a abrirlo.']);
+                $pendingCents = (int) $employee->pendingAdvances()->sum('amount_cents');
+                if ($pendingCents + $amountCents > Advance::LIMIT_CENTS) {
+                    $available = number_format((Advance::LIMIT_CENTS - $pendingCents) / 100, 2, ',', '.');
+
+                    throw ValidationException::withMessages(['amount' => "El monto supera el disponible de USD {$available}."]);
+                }
+
+                $account = $accountId === null ? null : $confirmation->activeBankAccount($accountId);
+                $this->ensureFundsAvailable($amountCents, $account, $calculateBalances);
+                $date = now('America/Guayaquil')->toDateString();
+                $shift = CashShift::active();
+                $movement = CashMovement::query()->create([
+                    'request_id' => (string) Str::uuid(),
+                    'request_fingerprint' => hash('sha256', $data['request_id']),
+                    'kind' => 'advance',
+                    'is_sensitive' => true,
+                    'payment_method' => $method,
+                    'amount_cents' => $amountCents,
+                    'description' => Str::limit('Adelanto de sueldo · '.$employee->name, 255, ''),
+                    'occurred_on' => $date,
+                    'bank_id' => $account?->bank_id,
+                    'bank_account_id' => $account?->id,
+                    'recorded_by' => $user->id,
+                    'recorder_name' => $user->name,
+                    'cash_shift_id' => $shift?->delivered_cash_cents === null ? $shift?->id : null,
+                ]);
+                $confirmation->handle($movement, $user, $voucher, $account);
+
+                $employee->advances()->create([
+                    'cash_opening_id' => $movement->cash_opening_id,
+                    'cash_movement_id' => $movement->id,
+                    'request_id' => $data['request_id'],
+                    'amount_cents' => $amountCents,
+                    'employee_name' => $employee->name,
+                    'issued_on' => $date,
+                    'responsible' => 'Administración',
+                    'note' => $data['note'] ?? null,
+                    'recorded_by' => $user->id,
+                    'recorder_name' => $user->name,
+                ]);
+            }, attempts: 3);
+        } catch (UniqueConstraintViolationException $exception) {
+            if ($accountId === null || ! CashMovement::query()->where('bank_id', BankAccount::query()->whereKey($accountId)->select('bank_id'))->where('voucher', $voucher)->exists()) {
+                throw $exception;
             }
 
-            $pendingCents = (int) $employee->pendingAdvances()->sum('amount_cents');
-            if ($pendingCents + $amountCents > Advance::LIMIT_CENTS) {
-                $available = number_format((Advance::LIMIT_CENTS - $pendingCents) / 100, 2, ',', '.');
-
-                throw ValidationException::withMessages(['amount' => "El monto supera el disponible de USD {$available}."]);
-            }
-
-            $opening = CashOpening::query()->lockForUpdate()->sole();
-            $opening->markUsed();
-
-            $employee->advances()->create([
-                'cash_opening_id' => $opening->opening_balance_cents === null ? null : $opening->id,
-                'request_id' => $data['request_id'],
-                'amount_cents' => $amountCents,
-                'employee_name' => $employee->name,
-                'issued_on' => now('America/Guayaquil')->toDateString(),
-                'responsible' => 'Administración',
-                'note' => $data['note'] ?? null,
-                'recorded_by' => $user->id,
-                'recorder_name' => $user->name,
-            ]);
-        }, attempts: 3);
+            throw $confirmation->duplicateVoucher();
+        }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Adelanto registrado.']);
 
         return to_route('advances.index');
+    }
+
+    private function ensureFundsAvailable(int $amountCents, ?BankAccount $account, CalculateCashBalances $calculateBalances): void
+    {
+        $balanceCents = $account === null
+            ? $calculateBalances->handle(includeTransit: true)['cash']
+            : $calculateBalances->bankAccountBalance($account);
+
+        if ($balanceCents === null) {
+            throw ValidationException::withMessages(['amount' => 'Registra el saldo inicial de efectivo antes de entregar un adelanto en caja.']);
+        }
+
+        if ($amountCents > $balanceCents) {
+            $available = number_format(max(0, $balanceCents) / 100, 2, ',', '.');
+            $source = $account === null ? 'en caja' : 'en la cuenta seleccionada';
+
+            throw ValidationException::withMessages(['amount' => "El monto supera el saldo disponible {$source}: USD {$available}."]);
+        }
     }
 
     public function deduct(Request $request, User $employee): RedirectResponse

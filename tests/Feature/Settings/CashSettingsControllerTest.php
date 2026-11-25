@@ -227,19 +227,19 @@ test('un adelanto registra el uso de la apertura vigente y bloquea su edición',
     $this->actingAs(User::factory()->create(['is_admin' => true]));
 
     $earlierRequest = (string) Str::uuid();
-    $this->post(route('advances.store', $employee), ['request_id' => $earlierRequest, 'amount' => '10'])
-        ->assertSessionHasNoErrors();
+    $this->post(route('advances.store', $employee), ['request_id' => $earlierRequest, 'amount' => '10', 'payment_method' => 'cash'])
+        ->assertSessionHasErrors('amount');
     $this->put(route('cash-settings.opening.update'), ['opening_balance' => '100,00'])
         ->assertSessionHasNoErrors();
     $this->assertDatabaseHas('cash_openings', ['opening_balance_cents' => 10000, 'opening_locked_at' => null]);
 
     $laterRequest = (string) Str::uuid();
-    $this->post(route('advances.store', $employee), ['request_id' => $laterRequest, 'amount' => '10'])
+    $this->post(route('advances.store', $employee), ['request_id' => $laterRequest, 'amount' => '10', 'payment_method' => 'cash'])
         ->assertSessionHasNoErrors();
 
     $this->put(route('cash-settings.opening.update'), ['opening_balance' => '200'])
         ->assertSessionHasErrors('opening_balance');
-    $this->assertDatabaseHas('advances', ['request_id' => $earlierRequest, 'cash_opening_id' => null]);
+    $this->assertDatabaseMissing('advances', ['request_id' => $earlierRequest]);
     $this->assertDatabaseHas('advances', ['request_id' => $laterRequest, 'cash_opening_id' => 1]);
 
     $this->withoutVite()->get(route('cash-settings.edit'))

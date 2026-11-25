@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Actions\ConvertUsdToCents;
+use Illuminate\Support\Facades\Gate;
 
 class StoreCashMovementRequest extends ConfirmCashMovementRequest
 {
@@ -23,6 +24,7 @@ class StoreCashMovementRequest extends ConfirmCashMovementRequest
         return [
             'request_id' => ['required', 'uuid'],
             'kind' => ['required', 'in:income,expense,deposit'],
+            'is_sensitive' => Gate::allows('manage-movement-sensitivity') ? ['sometimes', 'boolean'] : ['prohibited'],
             'payment_method' => ['exclude_if:kind,deposit', 'required', 'in:cash,transfer'],
             'amount' => ['required', 'numeric', 'decimal:0,2', 'gt:0', 'max:999999999.99'],
             'description' => ['exclude_if:kind,deposit', 'required', 'string', 'max:255'],

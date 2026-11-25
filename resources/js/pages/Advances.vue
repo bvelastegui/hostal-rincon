@@ -39,6 +39,11 @@ type Advance = {
     responsible: string;
     note: string | null;
     recorder_name: string;
+    cash_movement: {
+        payment_method: 'cash' | 'transfer';
+        voucher: string | null;
+        bank_account: { name: string; bank: { name: string } } | null;
+    } | null;
     deducted_at: string | null;
     deductor_name: string | null;
 };
@@ -323,6 +328,22 @@ function clearFilters(): void {
                         <p class="text-sm break-words text-muted-foreground">
                             Entregó {{ advance.responsible }} · Registró
                             {{ advance.recorder_name }}
+                        </p>
+                        <p class="text-sm text-muted-foreground">
+                            <template
+                                v-if="advance.cash_movement?.bank_account"
+                            >
+                                Transferencia ·
+                                {{
+                                    advance.cash_movement.bank_account.bank.name
+                                }}
+                                · {{ advance.cash_movement.bank_account.name }}
+                                <template v-if="advance.cash_movement.voucher">
+                                    · Voucher
+                                    {{ advance.cash_movement.voucher }}
+                                </template>
+                            </template>
+                            <template v-else>Efectivo</template>
                         </p>
                         <p v-if="advance.note" class="text-sm break-words">
                             {{ advance.note }}

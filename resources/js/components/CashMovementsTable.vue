@@ -1,29 +1,33 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 import { computed, h } from 'vue';
+import CashMovementSensitivityButton from '@/components/CashMovementSensitivityButton.vue';
 import DataTable from '@/components/DataTable.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
+    movementAccountRole,
     movementAction,
     movementAmount,
     movementLabels,
     movementMethod,
-    movementStatus,
+    movementStatusLabels,
 } from '@/lib/cash-movement';
 import { edit } from '@/routes/movements';
-import type { CashMovement } from '@/types/cash-movement';
+import type { MovementRow } from '@/types/cash-movement';
 import type { DataTableColumn } from '@/types/data-table';
 
 const props = withDefaults(
     defineProps<{
         caption: string;
-        movements: CashMovement[];
+        movements: MovementRow[];
         showDate?: boolean;
         canManage?: boolean;
     }>(),
     { canManage: true },
 );
+
+const page = usePage();
 
 function details(text: string, ...lines: string[]) {
     return h('div', { class: 'max-w-64 whitespace-normal wrap-break-word' }, [
@@ -36,11 +40,15 @@ function details(text: string, ...lines: string[]) {
     ]);
 }
 
-const columns = computed<DataTableColumn<CashMovement>[]>(() => {
-    const visible: DataTableColumn<CashMovement>[] = [];
+const columns = computed<DataTableColumn<MovementRow>[]>(() => {
+    const visible: DataTableColumn<MovementRow>[] = [];
 
     if (props.showDate) {
-        visible.push({ id: 'date', header: 'Fecha', accessorKey: 'date' });
+        visible.push({
+            id: 'date',
+            header: 'Fecha',
+            accessorKey: 'date',
+        });
     }
 
     visible.push(
@@ -48,24 +56,32 @@ const columns = computed<DataTableColumn<CashMovement>[]>(() => {
             id: 'description',
             header: 'Movimiento',
             cell: ({ row: { original: movement } }) =>
-                details(
-                    movement.description,
-                    movement.kind === 'deposit'
-                        ? movementLabels.deposit
-                        : movementLabels[movement.kind] +
-                              ' · ' +
-                              movementMethod(movement),
-                ),
+                movement.redacted
+                    ? details(movementLabels[movement.kind])
+                    : details(
+                          movement.description,
+                          movement.kind === 'deposit'
+                              ? movementLabels.deposit
+                              : movementLabels[movement.kind] +
+                                    ' · ' +
+                                    movementMethod(movement),
+                          movement.isSensitive ? 'Movimiento sensible' : '',
+                      ),
         },
         {
             id: 'reference',
             header: 'Cuenta y voucher',
             cell: ({ row: { original: movement } }) => {
+                if (movement.redacted) {
+                    return movement.account ? details(movement.account) : '—';
+                }
+
                 const origin = movement.originBankName
                     ? 'Origen: ' + movement.originBankName
                     : '';
                 const account = movement.accountBankName
-                    ? (movement.kind === 'expense' ? 'Origen: ' : 'Destino: ') +
+                    ? movementAccountRole(movement.kind) +
+                      ': ' +
                       movement.accountBankName +
                       (movement.accountName ? ' · ' + movement.accountName : '')
                     : '';
@@ -82,30 +98,36 @@ const columns = computed<DataTableColumn<CashMovement>[]>(() => {
             id: 'recorder',
             header: 'Registró',
             cell: ({ row: { original: movement } }) =>
-                details(
-                    movement.recorderName,
-                    movement.shiftId ? 'Turno #' + movement.shiftId : '',
-                    movement.responsibleName
-                        ? 'Custodia: ' + movement.responsibleName
-                        : '',
-                ),
+                movement.redacted
+                    ? details(movement.recorderName)
+                    : details(
+                          movement.recorderName,
+                          movement.shiftId ? 'Turno #' + movement.shiftId : '',
+                          movement.responsibleName
+                              ? 'Custodia: ' + movement.responsibleName
+                              : '',
+                      ),
         },
         {
             id: 'status',
             header: 'Estado',
             cell: ({ row: { original: movement } }) => {
-                const statusDate =
-                    movement.returnedOn ??
-                    (movement.kind === 'deposit' ? movement.confirmedOn : null);
+                const statusDate = movement.redacted
+                    ? null
+                    : (movement.returnedOn ??
+                      (movement.kind === 'deposit'
+                          ? movement.confirmedOn
+                          : null));
                 return h('div', [
                     h(
                         Badge,
                         {
-                            variant: movement.confirmed
-                                ? 'outline'
-                                : 'secondary',
+                            variant:
+                                movement.status === 'confirmed'
+                                    ? 'outline'
+                                    : 'secondary',
                         },
-                        () => movementStatus(movement),
+                        () => movementStatusLabels[movement.status],
                     ),
                     statusDate
                         ? h(
@@ -130,27 +152,44 @@ const columns = computed<DataTableColumn<CashMovement>[]>(() => {
         },
     );
 
-    if (props.canManage && props.movements.some(movementAction)) {
+    const canMarkSensitivity =
+        page.props.auth.canManageMovementSensitivity &&
+        props.movements.some(
+            (movement) => !movement.redacted && movement.kind !== 'advance',
+        );
+
+    if (
+        canMarkSensitivity ||
+        (props.canManage && props.movements.some(movementAction))
+    ) {
         visible.push({
             id: 'action',
             header: 'Acción',
             meta: { align: 'right' },
             cell: ({ row }) => {
-                const label = movementAction(row.original);
-                return label
-                    ? h(
-                          Button,
-                          { asChild: true, variant: 'outline', size: 'sm' },
-                          {
-                              default: () =>
-                                  h(
-                                      Link,
-                                      { href: edit(row.original.id) },
-                                      { default: () => label },
-                                  ),
-                          },
-                      )
-                    : null;
+                const movement = row.original;
+                if (movement.redacted) {
+                    return null;
+                }
+
+                const label = props.canManage ? movementAction(movement) : null;
+                return h('div', { class: 'flex flex-wrap justify-end gap-2' }, [
+                    label
+                        ? h(
+                              Button,
+                              { asChild: true, variant: 'outline', size: 'sm' },
+                              {
+                                  default: () =>
+                                      h(
+                                          Link,
+                                          { href: edit(row.original.id) },
+                                          { default: () => label },
+                                      ),
+                              },
+                          )
+                        : null,
+                    h(CashMovementSensitivityButton, { movement }),
+                ]);
             },
         });
     }
