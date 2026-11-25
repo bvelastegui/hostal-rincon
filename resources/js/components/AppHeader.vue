@@ -36,8 +36,7 @@ const page = usePage();
 const auth = computed(() => page.props.auth);
 const { isCurrentOrParentUrl } = useCurrentUrl();
 
-const activeItemStyles =
-    'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100';
+const activeItemStyles = 'bg-accent text-accent-foreground';
 
 const mainNavItems = useMainNavigation();
 </script>
@@ -81,7 +80,7 @@ const mainNavItems = useMainNavigation();
                                 </Link>
                                 <div
                                     v-if="isCurrentOrParentUrl(item.href)"
-                                    class="absolute bottom-0 left-0 h-0.5 w-full translate-y-px bg-black dark:bg-white"
+                                    class="absolute bottom-0 left-0 h-0.5 w-full translate-y-px bg-primary"
                                 ></div>
                             </NavigationMenuItem>
                         </NavigationMenuList>
@@ -106,7 +105,7 @@ const mainNavItems = useMainNavigation();
                                         :alt="auth.user.name"
                                     />
                                     <AvatarFallback
-                                        class="rounded-lg bg-neutral-200 font-semibold text-black dark:bg-neutral-700 dark:text-white"
+                                        class="rounded-lg bg-secondary font-semibold text-secondary-foreground"
                                     >
                                         {{ getInitials(auth.user?.name) }}
                                     </AvatarFallback>
@@ -125,7 +124,9 @@ const mainNavItems = useMainNavigation();
             v-if="props.breadcrumbs.length > 1"
             class="flex w-full border-b border-sidebar-border/70"
         >
-            <div class="app-container flex h-12 items-center text-neutral-500">
+            <div
+                class="app-container flex h-12 items-center text-muted-foreground"
+            >
                 <Breadcrumbs :breadcrumbs="breadcrumbs" />
             </div>
         </div>

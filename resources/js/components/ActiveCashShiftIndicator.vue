@@ -16,7 +16,8 @@ const status = computed(() =>
     <Alert
         v-if="shift"
         role="status"
-        class="block rounded-none border-x-0 border-t-0 border-amber-300 bg-amber-100 p-0 text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100"
+        variant="warning"
+        class="block rounded-none border-x-0 border-t-0 p-0"
     >
         <Link
             :href="cashShift()"

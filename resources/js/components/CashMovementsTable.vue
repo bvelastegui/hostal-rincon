@@ -12,6 +12,7 @@ import {
     movementLabels,
     movementMethod,
     movementStatusLabels,
+    movementStatusVariants,
 } from '@/lib/cash-movement';
 import { edit } from '@/routes/movements';
 import type { MovementRow } from '@/types/cash-movement';
@@ -122,10 +123,7 @@ const columns = computed<DataTableColumn<MovementRow>[]>(() => {
                     h(
                         Badge,
                         {
-                            variant:
-                                movement.status === 'confirmed'
-                                    ? 'outline'
-                                    : 'secondary',
+                            variant: movementStatusVariants[movement.status],
                         },
                         () => movementStatusLabels[movement.status],
                     ),

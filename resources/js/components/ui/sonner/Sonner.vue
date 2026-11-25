@@ -16,9 +16,22 @@ const props = defineProps<ToasterProps>()
       '--normal-bg': 'var(--popover)',
       '--normal-text': 'var(--popover-foreground)',
       '--normal-border': 'var(--border)',
+      '--success-bg': 'var(--success)',
+      '--success-text': 'var(--success-foreground)',
+      '--success-border': 'var(--success-border)',
+      '--info-bg': 'var(--info)',
+      '--info-text': 'var(--info-foreground)',
+      '--info-border': 'var(--info-border)',
+      '--warning-bg': 'var(--warning)',
+      '--warning-text': 'var(--warning-foreground)',
+      '--warning-border': 'var(--warning-border)',
+      '--error-bg': 'color-mix(in oklab, var(--destructive) 12%, var(--popover))',
+      '--error-text': 'var(--destructive)',
+      '--error-border': 'color-mix(in oklab, var(--destructive) 30%, var(--border))',
       '--border-radius': 'var(--radius)',
     }"
     v-bind="props"
+    rich-colors
   >
     <template #success-icon>
       <CircleCheckIcon class="size-4" />
