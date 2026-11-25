@@ -149,6 +149,7 @@ class CashMovementController extends Controller
             'kind' => $kind,
             'requestId' => (string) Str::uuid(),
             'movement' => null,
+            'depositCashCents' => $kind === 'deposit' ? $calculateCashBalances->handle(includeTransit: true)['cash'] : null,
             'banks' => $kind === 'deposit' ? [] : $this->confirmation->bankAccounts(),
             'originBanks' => $kind === 'income' ? Bank::query()->active()->orderBy('name')->get(['id', 'name']) : [],
             'responsibleUsers' => $kind === 'deposit' ? User::query()->orderBy('name')->get(['id', 'name']) : [],
@@ -183,7 +184,7 @@ class CashMovementController extends Controller
         ]);
     }
 
-    public function store(StoreCashMovementRequest $request): RedirectResponse
+    public function store(StoreCashMovementRequest $request, CalculateCashBalances $calculateCashBalances): RedirectResponse
     {
         $user = $request->user();
         $data = $request->validated();
@@ -211,16 +212,32 @@ class CashMovementController extends Controller
         $fingerprint = hash('sha256', json_encode([$attributes, $confirm], JSON_THROW_ON_ERROR));
 
         try {
-            $movement = DB::transaction(function () use ($attributes, $confirm, $data, $fingerprint, $user): CashMovement {
-                CashOpening::query()->lockForUpdate()->sole();
+            $movement = DB::transaction(function () use ($attributes, $confirm, $data, $fingerprint, $user, $calculateCashBalances): CashMovement {
+                $opening = CashOpening::query()->lockForUpdate()->sole();
                 $requestId = ['request_id' => $data['request_id']];
                 $movement = CashMovement::query()->where($requestId)->first();
 
                 if ($movement === null) {
                     $shift = $this->authorizeMovement($user);
+
+                    if ($attributes['kind'] === 'deposit') {
+                        $this->confirmation->useCashOpening();
+                        $availableCash = $calculateCashBalances->handle(includeTransit: true)['cash'] ?? 0;
+
+                        if ($attributes['amount_cents'] > $availableCash) {
+                            $available = number_format(max(0, $availableCash) / 100, 2, ',', '.');
+
+                            throw ValidationException::withMessages(['amount' => "El retiro supera el efectivo disponible en caja: USD {$available}."]);
+                        }
+                    }
+
                     $account = $attributes['bank_account_id'] === null
                         ? null
                         : $this->confirmation->activeBankAccount($attributes['bank_account_id']);
+
+                    if ($attributes['kind'] === 'expense') {
+                        $calculateCashBalances->ensureFundsAvailable($attributes['amount_cents'], $account);
+                    }
 
                     if (isset($attributes['bank_id'])) {
                         $originBank = Bank::query()->lockForUpdate()->findOrFail($attributes['bank_id']);
@@ -250,7 +267,7 @@ class CashMovementController extends Controller
 
                 if ($movement->wasRecentlyCreated) {
                     if ($movement->kind === 'deposit') {
-                        $movement->cash_opening_id = $this->confirmation->useCashOpening()->id;
+                        $movement->cash_opening_id = $opening->id;
                         $movement->save();
                     } elseif ($confirm) {
                         $this->confirmation->handle($movement, $user, $attributes['voucher']);

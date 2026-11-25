@@ -22,6 +22,7 @@ const props = defineProps<{
     kind: Exclude<MovementKind, 'advance'>;
     requestId: string | null;
     movement: CashMovement | null;
+    depositCashCents?: number | null;
     banks: { id: number; name: string }[];
     originBanks: { id: number; name: string }[];
     responsibleUsers: { id: number; name: string }[];
@@ -191,10 +192,24 @@ const userOptions = computed(() =>
                             placeholder="0,00"
                             :aria-invalid="!!errors.amount"
                             :aria-describedby="
-                                errors.amount ? 'amount-error' : undefined
+                                [
+                                    isDeposit ? 'deposit-cash' : null,
+                                    errors.amount ? 'amount-error' : null,
+                                ]
+                                    .filter(Boolean)
+                                    .join(' ') || undefined
                             "
                             required
                         />
+                        <FieldDescription v-if="isDeposit" id="deposit-cash">
+                            {{
+                                depositCashCents == null
+                                    ? 'Configura el saldo inicial de efectivo para registrar un retiro.'
+                                    : 'Efectivo disponible en caja: ' +
+                                      formatUsd(Math.max(0, depositCashCents)) +
+                                      '.'
+                            }}
+                        </FieldDescription>
                         <FieldError v-if="errors.amount" id="amount-error">{{
                             errors.amount
                         }}</FieldError>

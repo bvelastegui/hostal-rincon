@@ -196,7 +196,7 @@ class AdvanceController extends Controller
                 }
 
                 $account = $accountId === null ? null : $confirmation->activeBankAccount($accountId);
-                $this->ensureFundsAvailable($amountCents, $account, $calculateBalances);
+                $calculateBalances->ensureFundsAvailable($amountCents, $account);
                 $date = now('America/Guayaquil')->toDateString();
                 $shift = CashShift::active();
                 $movement = CashMovement::query()->create([
@@ -240,24 +240,6 @@ class AdvanceController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Adelanto registrado.']);
 
         return to_route('advances.index');
-    }
-
-    private function ensureFundsAvailable(int $amountCents, ?BankAccount $account, CalculateCashBalances $calculateBalances): void
-    {
-        $balanceCents = $account === null
-            ? $calculateBalances->handle(includeTransit: true)['cash']
-            : $calculateBalances->bankAccountBalance($account);
-
-        if ($balanceCents === null) {
-            throw ValidationException::withMessages(['amount' => 'Registra el saldo inicial de efectivo antes de entregar un adelanto en caja.']);
-        }
-
-        if ($amountCents > $balanceCents) {
-            $available = number_format(max(0, $balanceCents) / 100, 2, ',', '.');
-            $source = $account === null ? 'en caja' : 'en la cuenta seleccionada';
-
-            throw ValidationException::withMessages(['amount' => "El monto supera el saldo disponible {$source}: USD {$available}."]);
-        }
     }
 
     public function deduct(Request $request, User $employee): RedirectResponse
