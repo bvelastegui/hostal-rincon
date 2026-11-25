@@ -34,14 +34,12 @@ const items = computed(() => [
         aria-label="Menú principal"
         class="sticky bottom-0 z-30 mt-auto shrink-0 border-t bg-background pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
-        <ul
-            class="mx-auto flex w-full max-w-md gap-1 px-2 py-2 sm:gap-2 sm:px-3"
-        >
+        <ul class="mx-auto flex w-full max-w-md px-1 py-2 sm:gap-2 sm:px-3">
             <li v-for="item in items" :key="item.title" class="min-w-0 flex-1">
                 <Button
                     as-child
                     :variant="item.active ? 'secondary' : 'ghost'"
-                    class="h-auto min-h-12 w-full flex-col gap-1 px-0.5 py-1 text-[0.6875rem] has-[>svg]:px-0.5 sm:px-2 sm:text-sm sm:has-[>svg]:px-2"
+                    class="h-auto min-h-12 w-full flex-col gap-1 px-0 py-1 text-[0.6875rem] has-[>svg]:px-0 sm:px-2 sm:text-sm sm:has-[>svg]:px-2"
                 >
                     <Link
                         :href="item.href"
