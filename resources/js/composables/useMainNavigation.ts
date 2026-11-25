@@ -30,7 +30,12 @@ export function useMainNavigation() {
                   },
               ]
             : []),
-        { title: 'Turno', href: cashShift(), icon: Clock },
+        {
+            title: 'Turno',
+            href: cashShift(),
+            icon: Clock,
+            mobileMenu: page.props.auth.cashShiftAccess === null,
+        },
         ...(page.props.auth.canManageAdvances
             ? [{ title: 'Adelantos', href: advances(), icon: Wallet }]
             : []),
@@ -40,6 +45,7 @@ export function useMainNavigation() {
                       title: 'Reporte',
                       href: monthlyReport(),
                       icon: ChartNoAxesColumn,
+                      mobileMenu: true,
                   },
               ]
             : []),
