@@ -12,7 +12,11 @@ import { movementLabels, movementStatusLabels } from '@/lib/cash-movement';
 import { formatUsd } from '@/lib/money';
 import { index as cashClosings } from '@/routes/cash-closings';
 import { create, index } from '@/routes/movements';
-import type { CashMovement, MovementRow } from '@/types/cash-movement';
+import type {
+    CashBalances,
+    CashMovement,
+    MovementRow,
+} from '@/types/cash-movement';
 
 const props = defineProps<{
     date: string | null;
@@ -20,12 +24,7 @@ const props = defineProps<{
     shiftId: number | null;
     canManageDeposits: boolean;
     movementRestriction: string | null;
-    balances: {
-        cash: number | null;
-        bank: number;
-        transit: number | null;
-        total: number | null;
-    };
+    balances: CashBalances;
     depositsInTransit: CashMovement[];
     filters: {
         kind: string | null;

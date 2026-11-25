@@ -98,7 +98,7 @@ class CashMovementController extends Controller
                 ->with(self::BANK_RELATIONS)
                 ->latest('id')->paginate(20)->withQueryString()->through(fn (CashMovement $movement): array => $this->movementData($movement, $user)),
             'depositsInTransit' => $canManageDeposits
-                ? $filtered->where('kind', 'deposit')->whereNull('confirmed_at')->whereNull('returned_at')
+                ? $filtered->withStatus('in_transit')
                     ->with(self::BANK_RELATIONS)->oldest('id')->get()->map(fn (CashMovement $movement): array => $this->movementData($movement, $user))
                 : [],
         ]);
@@ -128,13 +128,7 @@ class CashMovementController extends Controller
             $query->where('bank_account_id', (int) substr($source, 5));
         }
 
-        return match ($filters['status'] ?? null) {
-            'confirmed' => $query->whereNotNull('confirmed_at')->whereNull('returned_at'),
-            'returned' => $query->whereNotNull('returned_at'),
-            'pending' => $query->where('kind', '!=', 'deposit')->whereNull('confirmed_at')->whereNull('returned_at'),
-            'in_transit' => $query->where('kind', 'deposit')->whereNull('confirmed_at')->whereNull('returned_at'),
-            default => $query,
-        };
+        return $query->withStatus($filters['status'] ?? null);
     }
 
     public function create(Request $request): Response

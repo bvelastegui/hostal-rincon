@@ -4,6 +4,12 @@ El proyecto usa versionamiento semántico (`MAJOR.MINOR.PATCH`). Incrementa `MAJ
 
 Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la fecha en formato `AAAA-MM-DD` y etiqueta el commit de la entrega con `vMAJOR.MINOR.PATCH`.
 
+## 0.7.0 (prevista)
+
+- El **Panel** de la administradora muestra saldos vigentes y enlaces para revisar transferencias pendientes, depósitos en tránsito y faltantes de caja sin resolver.
+- El **Panel** incluye accesos para registrar ingresos, egresos, retiros para depósito y adelantos.
+- El menú móvil de la administradora reúne **Turno**, **Reporte** y **Perfil** en **Más**. Los operadores tienen acceso directo a **Turno** y a **Movimientos** cuando tienen la caja a cargo.
+
 ## 0.6.0 (prevista)
 
 - La administradora puede consultar un **Reporte mensual** con cobros, gastos, depósitos y adelantos por empleado. Se distinguen los importes confirmados y pendientes, los depósitos devueltos y los saldos actuales de efectivo, tránsito y bancos. [HR-16](https://nexodigital.youtrack.cloud/issue/HR-16)

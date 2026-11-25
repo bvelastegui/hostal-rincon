@@ -76,17 +76,16 @@ class CashClosingController extends Controller
         }
 
         match ($filters['difference'] ?? null) {
-            'shortage' => $query->where('difference_cents', '<', 0),
+            'shortage' => $query->shortages(),
             'surplus' => $query->where('difference_cents', '>', 0),
             'balanced' => $query->where('difference_cents', 0),
             default => null,
         };
 
         if (isset($filters['resolution'])) {
-            $query->where('difference_cents', '<', 0);
             match ($filters['resolution']) {
-                'pending' => $query->whereNull('shortage_resolved_at'),
-                'resolved' => $query->whereNotNull('shortage_resolved_at'),
+                'pending' => $query->unresolvedShortages(),
+                'resolved' => $query->shortages()->whereNotNull('shortage_resolved_at'),
                 default => null,
             };
         }
