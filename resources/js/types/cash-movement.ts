@@ -1,14 +1,24 @@
-export type MovementKind = 'income' | 'expense' | 'deposit';
+export type MovementKind = 'income' | 'expense' | 'deposit' | 'advance';
+export type ReservedMovementKind = 'income' | 'expense' | 'transaction';
 export type PaymentMethod = 'cash' | 'transfer';
+
+export type MovementStatus =
+    | 'returned'
+    | 'confirmed'
+    | 'in_transit'
+    | 'pending';
 
 export type CashMovement = {
     id: number;
+    redacted: false;
+    isSensitive: boolean;
     shiftId: number | null;
     kind: MovementKind;
     paymentMethod: PaymentMethod;
     amountCents: number;
     description: string;
     date: string;
+    status: MovementStatus;
     originBankName: string | null;
     accountBankName: string | null;
     accountName: string | null;
@@ -19,3 +29,16 @@ export type CashMovement = {
     confirmed: boolean;
     returnedOn: string | null;
 };
+
+export type MovementRow =
+    | CashMovement
+    | {
+          id: number;
+          redacted: true;
+          kind: ReservedMovementKind;
+          recorderName: string;
+          amountCents: number;
+          date: string;
+          status: MovementStatus;
+          account: string | null;
+      };

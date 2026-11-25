@@ -49,6 +49,7 @@ class HandleInertiaRequests extends Middleware
                 'user' => $user,
                 'canManageAdvances' => Gate::allows('manage-advances'),
                 'canManageCashSettings' => Gate::allows('manage-cash-settings'),
+                'canManageMovementSensitivity' => Gate::allows('manage-movement-sensitivity'),
                 'cashShiftAccess' => $request->attributes->get('cashShiftAccess'),
                 'activeCashShift' => $activeShift === null ? null : [
                     'responsible' => $activeShift->responsible_name,

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\CalculateCashBalances;
+use App\Actions\ConfirmCashMovement;
 use App\Http\Requests\ConfirmCashMovementRequest;
 use App\Http\Requests\StoreCashMovementRequest;
 use App\Models\Bank;
@@ -18,23 +19,27 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class CashMovementController extends Controller
 {
+    public function __construct(private ConfirmCashMovement $confirmation) {}
+
     private const array BANK_RELATIONS = ['voucherBank:id,name', 'bankAccount:id,bank_id,name', 'bankAccount.bank:id,name'];
 
     public function index(Request $request, CalculateCashBalances $calculateCashBalances): Response
     {
         $user = $request->user();
         $canManageDeposits = Gate::allows('manage-deposits');
+        $kinds = $user->is_admin ? array_keys(CashMovement::OPERATOR_KIND) : array_values(array_unique(CashMovement::OPERATOR_KIND));
         $filters = $request->validate([
             'date' => [$canManageDeposits ? 'nullable' : 'exclude', 'date_format:Y-m-d'],
             'date_from' => $canManageDeposits ? ['nullable', 'required_with:date_to', 'date_format:Y-m-d'] : ['exclude'],
             'date_to' => $canManageDeposits ? ['nullable', 'required_with:date_from', 'date_format:Y-m-d', 'after_or_equal:date_from'] : ['exclude'],
-            'kind' => ['nullable', 'in:income,expense,deposit'],
+            'kind' => ['nullable', Rule::in($kinds)],
             'recorded_by' => ['nullable', 'integer', 'min:1'],
             'status' => ['nullable', 'in:pending,confirmed,in_transit,returned'],
             'source' => ['nullable', 'regex:/^(cash|bank:[1-9][0-9]{0,17})$/'],
@@ -47,11 +52,12 @@ class CashMovementController extends Controller
         $visibleShiftId = $restriction === null ? $shift?->id : null;
         $scope = CashMovement::query();
 
-        if (! $canManageDeposits) {
-            $scope->where('cash_shift_id', $visibleShiftId ?? 0)->where('kind', '!=', 'deposit');
+        if (! $user->is_admin) {
+            $scope->where('cash_shift_id', $visibleShiftId ?? 0)
+                ->where(fn ($query) => $query->whereIn('kind', ['income', 'expense', 'advance'])->orWhere('is_sensitive', true));
         }
 
-        $filtered = $this->filterMovements(clone $scope, $filters);
+        $filtered = $this->filterMovements(clone $scope, $filters, $user->is_admin);
 
         if ($explicitRange) {
             $filtered->whereBetween('occurred_on', [$date, $dateTo]);
@@ -85,15 +91,15 @@ class CashMovementController extends Controller
                     ->orderBy('name')->get(['id', 'name']),
                 'accounts' => BankAccount::query()->whereIn('id', (clone $scope)->select('bank_account_id'))
                     ->with('bank:id,name')->orderBy('name')->get(['id', 'bank_id', 'name'])
-                    ->map(fn (BankAccount $account): array => ['id' => $account->id, 'name' => $account->bank->name.' · '.$account->name]),
+                    ->map(fn (BankAccount $account): array => ['id' => $account->id, 'name' => $account->displayName()]),
             ],
             'balances' => $calculateCashBalances->handle($canManageDeposits),
             'movements' => $records
                 ->with(self::BANK_RELATIONS)
-                ->latest('id')->paginate(20)->withQueryString()->through($this->movementData(...)),
+                ->latest('id')->paginate(20)->withQueryString()->through(fn (CashMovement $movement): array => $this->movementData($movement, $user)),
             'depositsInTransit' => $canManageDeposits
                 ? $filtered->where('kind', 'deposit')->whereNull('confirmed_at')->whereNull('returned_at')
-                    ->with(self::BANK_RELATIONS)->oldest('id')->get()->map($this->movementData(...))
+                    ->with(self::BANK_RELATIONS)->oldest('id')->get()->map(fn (CashMovement $movement): array => $this->movementData($movement, $user))
                 : [],
         ]);
     }
@@ -103,10 +109,11 @@ class CashMovementController extends Controller
      * @param  array<string, mixed>  $filters
      * @return Builder<CashMovement>
      */
-    private function filterMovements(Builder $query, array $filters): Builder
+    private function filterMovements(Builder $query, array $filters, bool $isAdmin): Builder
     {
         if (isset($filters['kind'])) {
-            $query->where('kind', $filters['kind']);
+            $kinds = $isAdmin ? [$filters['kind']] : array_keys(CashMovement::OPERATOR_KIND, $filters['kind'], true);
+            $query->whereIn('kind', $kinds);
         }
 
         if (isset($filters['recorded_by'])) {
@@ -115,7 +122,8 @@ class CashMovementController extends Controller
 
         $source = $filters['source'] ?? null;
         if ($source === 'cash') {
-            $query->where('payment_method', 'cash');
+            $query->where('payment_method', 'cash')
+                ->when(! $isAdmin, fn (Builder $query) => $query->whereNull('bank_account_id'));
         } elseif (is_string($source)) {
             $query->where('bank_account_id', (int) substr($source, 5));
         }
@@ -144,7 +152,7 @@ class CashMovementController extends Controller
             'kind' => $kind,
             'requestId' => (string) Str::uuid(),
             'movement' => null,
-            'banks' => $kind === 'deposit' ? [] : $this->bankAccounts(),
+            'banks' => $kind === 'deposit' ? [] : $this->confirmation->bankAccounts(),
             'originBanks' => $kind === 'income' ? Bank::query()->active()->orderBy('name')->get(['id', 'name']) : [],
             'responsibleUsers' => $kind === 'deposit' ? User::query()->orderBy('name')->get(['id', 'name']) : [],
         ]);
@@ -152,6 +160,8 @@ class CashMovementController extends Controller
 
     public function edit(Request $request, CashMovement $movement): Response|RedirectResponse
     {
+        abort_if($movement->kind === 'advance', 404);
+
         $user = $request->user();
         $shift = CashShift::active();
         $restriction = CashShift::movementRestriction($user, $shift);
@@ -169,8 +179,8 @@ class CashMovementController extends Controller
         return Inertia::render('CashMovementForm', [
             'kind' => $movement->kind,
             'requestId' => null,
-            'movement' => $this->movementData($movement->load(self::BANK_RELATIONS)),
-            'banks' => $movement->kind === 'deposit' ? $this->bankAccounts() : [],
+            'movement' => $this->movementData($movement->load(self::BANK_RELATIONS), $user),
+            'banks' => $movement->kind === 'deposit' ? $this->confirmation->bankAccounts() : [],
             'originBanks' => [],
             'responsibleUsers' => [],
         ]);
@@ -197,6 +207,10 @@ class CashMovementController extends Controller
             $attributes['bank_id'] = (int) $data['origin_bank_id'];
         }
 
+        if ($data['is_sensitive'] ?? false) {
+            $attributes['is_sensitive'] = true;
+        }
+
         $fingerprint = hash('sha256', json_encode([$attributes, $confirm], JSON_THROW_ON_ERROR));
 
         try {
@@ -209,7 +223,7 @@ class CashMovementController extends Controller
                     $shift = $this->authorizeMovement($user);
                     $account = $attributes['bank_account_id'] === null
                         ? null
-                        : $this->activeBankAccount($attributes['bank_account_id']);
+                        : $this->confirmation->activeBankAccount($attributes['bank_account_id']);
 
                     if (isset($attributes['bank_id'])) {
                         $originBank = Bank::query()->lockForUpdate()->findOrFail($attributes['bank_id']);
@@ -239,10 +253,10 @@ class CashMovementController extends Controller
 
                 if ($movement->wasRecentlyCreated) {
                     if ($movement->kind === 'deposit') {
-                        $movement->cash_opening_id = $this->useCashOpening()->id;
+                        $movement->cash_opening_id = $this->confirmation->useCashOpening()->id;
                         $movement->save();
                     } elseif ($confirm) {
-                        $this->confirmMovement($movement, $user, $attributes['voucher']);
+                        $this->confirmation->handle($movement, $user, $attributes['voucher']);
                     }
                 }
 
@@ -252,7 +266,7 @@ class CashMovementController extends Controller
             $movement = CashMovement::query()->where('request_id', $data['request_id'])->first();
 
             if ($movement === null) {
-                throw $this->duplicateVoucher();
+                throw $this->confirmation->duplicateVoucher();
             }
 
             $this->ensureMatchingRequest($movement, $user, $fingerprint);
@@ -267,6 +281,8 @@ class CashMovementController extends Controller
 
     public function update(ConfirmCashMovementRequest $request, CashMovement $movement): RedirectResponse
     {
+        abort_if($movement->kind === 'advance', 404);
+
         $user = $request->user();
         $voucher = $request->validated('voucher');
         $accountId = $request->integer('bank_account_id');
@@ -283,15 +299,30 @@ class CashMovementController extends Controller
                 }
 
                 if ($lockedMovement->confirmed_at === null) {
-                    $account = $lockedMovement->kind === 'deposit' ? $this->activeBankAccount($accountId) : null;
-                    $this->confirmMovement($lockedMovement, $user, $voucher ?? $lockedMovement->voucher, $account);
+                    $account = $lockedMovement->kind === 'deposit' ? $this->confirmation->activeBankAccount($accountId) : null;
+                    $this->confirmation->handle($lockedMovement, $user, $voucher ?? $lockedMovement->voucher, $account);
                 }
             }, attempts: 3);
         } catch (UniqueConstraintViolationException) {
-            throw $this->duplicateVoucher();
+            throw $this->confirmation->duplicateVoucher();
         }
 
         return $this->saved($movement, $movement->kind === 'deposit' ? 'Depósito confirmado.' : 'Cobro confirmado.');
+    }
+
+    public function updateSensitivity(Request $request, CashMovement $movement): RedirectResponse
+    {
+        abort_if($movement->kind === 'advance', 404);
+        $data = $request->validate(['is_sensitive' => ['required', 'boolean']]);
+        $sensitive = (bool) $data['is_sensitive'];
+        CashMovement::query()->whereKey($movement->id)->update(['is_sensitive' => $sensitive]);
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => $sensitive ? 'Movimiento marcado como sensible.' : 'Se quitó la marca de movimiento sensible.',
+        ]);
+
+        return back(fallback: route('movements.index'));
     }
 
     public function returnToCash(Request $request, CashMovement $movement): RedirectResponse
@@ -316,47 +347,6 @@ class CashMovementController extends Controller
         return $this->saved($movement, 'El dinero en tránsito volvió a efectivo.');
     }
 
-    private function confirmMovement(CashMovement $movement, User $user, ?string $voucher, ?BankAccount $account = null): void
-    {
-        if ($movement->kind === 'deposit' || $movement->payment_method === 'transfer') {
-            if ($voucher === null) {
-                throw ValidationException::withMessages(['voucher' => 'Ingresa el número de voucher para confirmar el movimiento bancario.']);
-            }
-
-            $account ??= BankAccount::query()->whereKey($movement->bank_account_id)->lockForUpdate()->firstOrFail();
-
-            if ($account->opening_locked_at === null) {
-                $account->opening_locked_at = now();
-                $account->save();
-            }
-
-            $movement->voucher = $voucher;
-            if ($movement->kind === 'deposit') {
-                $movement->bank_id = $account->bank_id;
-            }
-            $movement->bank_account_id = $account->id;
-        } else {
-            $movement->cash_opening_id = $this->useCashOpening()->id;
-        }
-
-        $movement->confirmed_at = now();
-        $movement->confirmed_by = $user->id;
-        $movement->save();
-    }
-
-    private function useCashOpening(): CashOpening
-    {
-        $opening = CashOpening::query()->lockForUpdate()->sole();
-
-        if ($opening->opening_balance_cents === null) {
-            throw ValidationException::withMessages(['amount' => 'La administradora debe registrar el saldo inicial de efectivo.']);
-        }
-
-        $opening->markUsed();
-
-        return $opening;
-    }
-
     private function authorizeMovement(User $user): ?CashShift
     {
         $shift = CashShift::active();
@@ -371,45 +361,38 @@ class CashMovementController extends Controller
 
     private function ensureMovementInShift(User $user, ?CashShift $shift, CashMovement $movement): void
     {
-        abort_if(! $user->is_admin && ($shift === null || $movement->cash_shift_id !== $shift->id), 404);
-    }
-
-    private function activeBankAccount(int $id): BankAccount
-    {
-        $account = BankAccount::query()->lockForUpdate()->findOrFail($id);
-        $bank = Bank::query()->lockForUpdate()->findOrFail($account->bank_id);
-
-        if (! $bank->is_active) {
-            throw ValidationException::withMessages(['bank_account_id' => 'Selecciona una cuenta de un banco activo.']);
-        }
-
-        return $account;
-    }
-
-    /** @return list<array{id: int, name: string}> */
-    private function bankAccounts(): array
-    {
-        $accounts = BankAccount::query()->whereRelation('bank', 'is_active', true)
-            ->with('bank:id,name')->orderBy('name')->get()
-            ->map(fn (BankAccount $account): array => [
-                'id' => $account->id,
-                'name' => $account->bank->name.' · '.$account->name,
-            ])->all();
-
-        return array_values($accounts);
+        abort_if(! $movement->detailsVisibleTo($user)
+            || (! $user->is_admin && ($shift === null || $movement->cash_shift_id !== $shift->id)), 404);
     }
 
     /** @return array<string, mixed> */
-    private function movementData(CashMovement $movement): array
+    private function movementData(CashMovement $movement, User $user): array
     {
+        if (! $movement->detailsVisibleTo($user)) {
+            return [
+                'id' => $movement->id,
+                'redacted' => true,
+                'kind' => CashMovement::OPERATOR_KIND[$movement->kind] ?? 'transaction',
+                'recorderName' => $movement->recorder_name,
+                'date' => $movement->occurred_on,
+                'status' => $movement->status(),
+                'account' => $movement->bankAccount?->displayName() ?? ($movement->payment_method === 'cash' ? 'Efectivo' : null),
+                'amountCents' => in_array($movement->kind, ['expense', 'advance'], true)
+                    ? -$movement->amount_cents : $movement->amount_cents,
+            ];
+        }
+
         return [
             'id' => $movement->id,
+            'redacted' => false,
+            'isSensitive' => $movement->isSensitive(),
             'shiftId' => $movement->cash_shift_id,
             'kind' => $movement->kind,
             'paymentMethod' => $movement->payment_method,
             'amountCents' => $movement->amount_cents,
             'description' => $movement->description,
             'date' => $movement->occurred_on,
+            'status' => $movement->status(),
             'originBankName' => $movement->kind === 'income' ? $movement->voucherBank?->name : null,
             'accountBankName' => $movement->bankAccount?->bank->name,
             'accountName' => $movement->bankAccount?->name,
@@ -427,11 +410,6 @@ class CashMovementController extends Controller
         if ($movement->recorded_by !== $user->id || $movement->request_fingerprint !== $fingerprint) {
             throw ValidationException::withMessages(['request_id' => 'La solicitud ya se utilizó. Abre un formulario nuevo.']);
         }
-    }
-
-    private function duplicateVoucher(): ValidationException
-    {
-        return ValidationException::withMessages(['voucher' => 'El voucher ya está registrado para el banco que lo emitió.']);
     }
 
     private function saved(CashMovement $movement, string $message): RedirectResponse

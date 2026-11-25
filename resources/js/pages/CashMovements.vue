@@ -8,11 +8,11 @@ import DataTableDateRange from '@/components/DataTableDateRange.vue';
 import DataTableFilter from '@/components/DataTableFilter.vue';
 import DataTablePagination from '@/components/DataTablePagination.vue';
 import { Button } from '@/components/ui/button';
-import { movementLabels } from '@/lib/cash-movement';
+import { movementLabels, movementStatusLabels } from '@/lib/cash-movement';
 import { formatUsd } from '@/lib/money';
 import { index as cashClosings } from '@/routes/cash-closings';
 import { create, index } from '@/routes/movements';
-import type { CashMovement } from '@/types/cash-movement';
+import type { CashMovement, MovementRow } from '@/types/cash-movement';
 
 const props = defineProps<{
     date: string | null;
@@ -38,7 +38,7 @@ const props = defineProps<{
         accounts: { id: number; name: string }[];
     };
     movements: {
-        data: CashMovement[];
+        data: MovementRow[];
         prev_page_url: string | null;
         next_page_url: string | null;
     };
@@ -76,8 +76,16 @@ const filterFields = computed(() => [
             { value: 'income', label: movementLabels.income },
             { value: 'expense', label: movementLabels.expense },
             ...(props.canManageDeposits
-                ? [{ value: 'deposit', label: 'Depósito' }]
-                : []),
+                ? [
+                      { value: 'deposit', label: 'Depósito' },
+                      { value: 'advance', label: 'Adelanto' },
+                  ]
+                : [
+                      {
+                          value: 'transaction',
+                          label: movementLabels.transaction,
+                      },
+                  ]),
         ],
     },
     {
@@ -96,14 +104,10 @@ const filterFields = computed(() => [
         label: 'Estado',
         options: [
             { value: all, label: 'Todos los estados' },
-            { value: 'pending', label: 'Pendiente' },
-            { value: 'confirmed', label: 'Confirmado' },
-            ...(props.canManageDeposits
-                ? [
-                      { value: 'in_transit', label: 'En tránsito' },
-                      { value: 'returned', label: 'Devuelto' },
-                  ]
-                : []),
+            ...Object.entries(movementStatusLabels).map(([value, label]) => ({
+                value,
+                label,
+            })),
         ],
     },
     {

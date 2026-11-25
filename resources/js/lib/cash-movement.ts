@@ -1,38 +1,55 @@
 import { formatUsd } from '@/lib/money';
-import type { CashMovement, MovementKind } from '@/types/cash-movement';
+import type {
+    CashMovement,
+    MovementKind,
+    MovementRow,
+    MovementStatus,
+    PaymentMethod,
+} from '@/types/cash-movement';
 
-export const movementLabels: Record<MovementKind, string> = {
+export const movementLabels: Record<MovementKind | 'transaction', string> = {
     income: 'Ingreso',
     expense: 'Egreso',
     deposit: 'Depósito de efectivo',
+    advance: 'Adelanto de sueldo',
+    transaction: 'Transacción',
 };
 
 const movementSigns: Record<MovementKind, string> = {
     income: '+',
     expense: '−',
     deposit: '',
+    advance: '−',
 };
+
+export const paymentOptions: { value: PaymentMethod; label: string }[] = [
+    { value: 'cash', label: 'Efectivo' },
+    { value: 'transfer', label: 'Transferencia bancaria' },
+];
+
+export function movementAccountRole(kind: MovementKind): string {
+    return kind === 'expense' || kind === 'advance' ? 'Origen' : 'Destino';
+}
 
 export function movementMethod(movement: CashMovement): string {
     return movement.paymentMethod === 'cash' ? 'Efectivo' : 'Transferencia';
 }
 
-export function movementAmount(movement: CashMovement): string {
-    return movementSigns[movement.kind] + formatUsd(movement.amountCents);
+export function movementAmount(movement: MovementRow): string {
+    const amount = formatUsd(movement.amountCents);
+
+    return movement.redacted ? amount : movementSigns[movement.kind] + amount;
 }
 
-export function movementStatus(movement: CashMovement): string {
-    if (movement.returnedOn) {
-        return 'Devuelto';
-    }
-    if (movement.confirmed) {
-        return 'Confirmado';
-    }
-    return movement.kind === 'deposit' ? 'En tránsito' : 'Pendiente';
-}
+export const movementStatusLabels: Record<MovementStatus, string> = {
+    confirmed: 'Confirmado',
+    pending: 'Pendiente',
+    in_transit: 'En tránsito',
+    returned: 'Devuelto',
+};
 
-export function movementAction(movement: CashMovement): string | null {
-    if (movement.confirmed || movement.returnedOn) {
+export function movementAction(movement: MovementRow): string | null {
+    if (movement.redacted || movement.confirmed || movement.returnedOn) {
         return null;
     }
     return movement.kind === 'deposit' ? 'Gestionar depósito' : 'Confirmar';
