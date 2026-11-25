@@ -241,14 +241,14 @@ test('traslada efectivo a tránsito y luego a banco sin variar el total ni dupli
         ->where('balances.transit', 10025)
         ->where('balances.total', 26000)
         ->has('movements.data', 0)
-        ->where('depositsInTransit.0.id', $movement->id));
+        ->where('depositsInTransit.data.0.id', $movement->id));
     $this->get(route('movements.index', ['kind' => 'deposit', 'status' => 'in_transit', 'source' => 'cash']))
         ->assertInertia(fn (Assert $page) => $page->has('movements.data', 0)
-            ->where('depositsInTransit.0.id', $movement->id));
+            ->where('depositsInTransit.data.0.id', $movement->id));
     $this->get(route('movements.index', ['kind' => 'income']))
-        ->assertInertia(fn (Assert $page) => $page->has('depositsInTransit', 0));
+        ->assertInertia(fn (Assert $page) => $page->has('depositsInTransit.data', 0));
     $this->get(route('movements.index', ['kind' => 'deposit', 'date_from' => '2000-01-01', 'date_to' => '2000-01-02']))
-        ->assertInertia(fn (Assert $page) => $page->has('depositsInTransit', 0));
+        ->assertInertia(fn (Assert $page) => $page->has('depositsInTransit.data', 0));
 
     $confirmation = ['bank_account_id' => $account->id, 'voucher' => 'DEP-01'];
     $this->patch(route('movements.update', $movement), ['voucher' => 'DEP-01'])->assertSessionHasErrors('bank_account_id');
@@ -266,7 +266,7 @@ test('traslada efectivo a tránsito y luego a banco sin variar el total ni dupli
         ->where('balances.bank', 11025)
         ->where('balances.transit', 0)
         ->where('balances.total', 26000)
-        ->has('depositsInTransit', 0)
+        ->has('depositsInTransit.data', 0)
         ->where('movements.data.0.kind', 'deposit'));
 
     $this->post(route('movements.store'), [
@@ -304,7 +304,7 @@ test('solo la administradora puede consultar y gestionar depósitos y devolucion
     $this->patch(route('movements.return-to-cash', $movement))->assertForbidden();
     $this->get(route('movements.index'))->assertInertia(fn (Assert $page) => $page
         ->where('canManageDeposits', false)
-        ->where('depositsInTransit', [])
+        ->where('depositsInTransit', null)
         ->where('balances.transit', null)
         ->where('balances.total', 6985)
         ->has('movements.data', 0));
@@ -330,7 +330,7 @@ test('solo la administradora puede consultar y gestionar depósitos y devolucion
         ->where('balances.transit', 0)
         ->where('balances.total', 11000)
         ->where('movements.data.0.returnedOn', now('America/Guayaquil')->toDateString())
-        ->has('depositsInTransit', 0));
+        ->has('depositsInTransit.data', 0));
 
     $this->actingAs($operator)->get(route('movements.index'))
         ->assertInertia(fn (Assert $page) => $page->has('movements.data', 0));
@@ -580,7 +580,7 @@ test('un depósito reservado conserva la fecha, el estado y la cuenta visible du
     ];
     $this->actingAs($operator)->get(route('movements.index', ['status' => 'in_transit', 'kind' => 'transaction']))->assertInertia(fn (Assert $page) => $page
         ->where('movements.data.0', $reserved)
-        ->has('depositsInTransit', 0));
+        ->where('depositsInTransit', null));
 
     $account = BankAccount::factory()->create();
     $this->actingAs($admin)->patch(route('movements.update', $deposit), ['voucher' => 'DEP-65', 'bank_account_id' => $account->id])
@@ -589,4 +589,57 @@ test('un depósito reservado conserva la fecha, el estado y la cuenta visible du
         ->assertInertia(fn (Assert $page) => $page->has('movements.data', 0));
     $this->get(route('movements.index', ['source' => 'bank:'.$account->id]))->assertInertia(fn (Assert $page) => $page
         ->where('movements.data.0', [...$reserved, 'status' => 'confirmed', 'account' => $account->displayName()]));
+});
+
+test('la administradora pagina por separado y el operador ve todos los movimientos de su turno', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $operator = User::factory()->create();
+    openMovementShift($operator);
+    CashOpening::query()->update(['opening_balance_cents' => 10000]);
+
+    $this->actingAs($operator);
+    for ($number = 1; $number <= 12; $number++) {
+        $this->post(route('movements.store'), [
+            'request_id' => (string) Str::uuid(),
+            'kind' => 'income',
+            'payment_method' => 'cash',
+            'amount' => '5',
+            'description' => 'Cobro '.$number,
+        ])->assertSessionHasNoErrors();
+    }
+
+    $this->actingAs($admin);
+    for ($number = 1; $number <= 11; $number++) {
+        $this->post(route('movements.store'), [
+            'request_id' => (string) Str::uuid(),
+            'kind' => 'deposit',
+            'amount' => '2',
+            'responsible_id' => $operator->id,
+        ])->assertSessionHasNoErrors();
+    }
+
+    $this->get(route('movements.index'))->assertInertia(fn (Assert $page) => $page
+        ->where('movements.per_page', 10)
+        ->where('movements.total', 12)
+        ->has('movements.data', 10)
+        ->where('depositsInTransit.per_page', 10)
+        ->where('depositsInTransit.total', 11)
+        ->has('depositsInTransit.data', 10));
+
+    $this->get(route('movements.index', ['page' => 2]))->assertInertia(fn (Assert $page) => $page
+        ->where('movements.current_page', 2)
+        ->where('movements.from', 11)
+        ->has('movements.data', 2)
+        ->where('depositsInTransit.current_page', 1));
+
+    $this->get(route('movements.index', ['transit_page' => 2]))->assertInertia(fn (Assert $page) => $page
+        ->where('movements.current_page', 1)
+        ->where('depositsInTransit.current_page', 2)
+        ->has('depositsInTransit.data', 1));
+
+    $this->actingAs($operator)->get(route('movements.index', ['page' => 2]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('movements.data', 12)
+            ->missing('movements.total')
+            ->where('depositsInTransit', null));
 });

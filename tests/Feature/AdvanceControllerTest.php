@@ -202,6 +202,7 @@ test('filtra el historial por mes calendario e incluye sus dos extremos', functi
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page->component('Advances')
             ->where('filters.month', '2026-10')
+            ->where('history.per_page', 10)
             ->has('history.data', 2)
             ->where('history.data.0.id', $last->id)
             ->where('history.data.1.id', $first->id));
@@ -406,4 +407,43 @@ test('una transferencia solo puede usar el saldo confirmado de la cuenta selecci
     $this->get(route('advances.create', $employee))->assertInertia(fn (Assert $page) => $page
         ->where('bankAccounts.0.balanceCents', 0)
         ->where('bankAccounts.1.balanceCents', 50000));
+});
+
+test('filtra adelantos por forma de pago junto con empleado, estado y mes', function () {
+    $this->travelTo(now()->setDate(2026, 10, 15)->setTime(18, 0));
+    $admin = User::factory()->create(['is_admin' => true]);
+    $employee = User::factory()->create();
+    $otherEmployee = User::factory()->create();
+    $account = BankAccount::factory()->create(['opening_balance_cents' => 10000]);
+    CashOpening::query()->update(['opening_balance_cents' => 10000]);
+    $legacy = Advance::factory()->for($employee, 'employee')->create();
+
+    $this->withoutVite()->actingAs($admin);
+    $cash = (string) Str::uuid();
+    $this->post(route('advances.store', $employee), ['request_id' => $cash, 'amount' => '25', 'payment_method' => 'cash'])
+        ->assertSessionHasNoErrors();
+    $linkedCash = Advance::query()->where('request_id', $cash)->sole();
+
+    foreach ([$employee, $otherEmployee] as $recipient) {
+        $this->post(route('advances.store', $recipient), [
+            'request_id' => (string) Str::uuid(),
+            'amount' => '20',
+            'payment_method' => 'transfer',
+            'bank_account_id' => $account->id,
+            'voucher' => 'MEDIO-'.$recipient->id,
+        ])->assertSessionHasNoErrors();
+    }
+
+    $filters = ['employee' => $employee->id, 'status' => 'pending', 'month' => '2026-10'];
+    $this->get(route('advances.index', [...$filters, 'payment_method' => 'cash']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('filters.payment_method', 'cash')
+            ->has('history.data', 2)
+            ->where('history.data.0.id', $linkedCash->id)
+            ->where('history.data.1.id', $legacy->id));
+    $this->get(route('advances.index', [...$filters, 'payment_method' => 'transfer']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('filters.payment_method', 'transfer')
+            ->has('history.data', 1)
+            ->where('history.data.0.cash_movement.voucher', 'MEDIO-'.$employee->id));
 });

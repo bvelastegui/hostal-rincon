@@ -32,6 +32,7 @@ class AdvanceController extends Controller
             'employee' => ['nullable', 'integer', 'exists:users,id'],
             'status' => ['nullable', 'in:pending,deducted'],
             'month' => ['nullable', 'date_format:Y-m'],
+            'payment_method' => ['nullable', 'in:cash,transfer'],
         ]);
 
         $employees = User::query()->operators()->orderBy('name')
@@ -46,10 +47,13 @@ class AdvanceController extends Controller
                 ->where('issued_on', '<', Carbon::createFromFormat('!Y-m', $month)->addMonth()->startOfMonth()->toDateString()))
             ->when(($filters['status'] ?? null) === 'pending', fn (Builder $query) => $query->pending())
             ->when(($filters['status'] ?? null) === 'deducted', fn (Builder $query) => $query->whereNotNull('deducted_at'))
+            ->when(($filters['payment_method'] ?? null) === 'cash', fn (Builder $query) => $query->where(fn (Builder $query) => $query
+                ->whereNull('cash_movement_id')->orWhereRelation('cashMovement', 'payment_method', 'cash')))
+            ->when(($filters['payment_method'] ?? null) === 'transfer', fn (Builder $query) => $query->whereRelation('cashMovement', 'payment_method', 'transfer'))
             ->with(['cashMovement:id,payment_method,bank_account_id,voucher', 'cashMovement.bankAccount:id,name,bank_id', 'cashMovement.bankAccount.bank:id,name'])
             ->orderByDesc('issued_on')->orderByDesc('id')
-            ->paginate(15, ['id', 'employee_id', 'employee_name', 'amount_cents', 'issued_on', 'responsible', 'note', 'recorder_name', 'deducted_at', 'deductor_name', 'cash_movement_id'])
-            ->withQueryString();
+            ->paginate(self::TABLE_PAGE_SIZE, ['id', 'employee_id', 'employee_name', 'amount_cents', 'issued_on', 'responsible', 'note', 'recorder_name', 'deducted_at', 'deductor_name', 'cash_movement_id'])
+            ->onEachSide(1)->withQueryString();
 
         return Inertia::render('Advances', [
             'employees' => $employees->map(fn (User $employee): array => [

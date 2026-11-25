@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
+import { X } from '@lucide/vue';
+import { computed, h, ref } from 'vue';
 import {
     create,
     index,
@@ -8,6 +9,10 @@ import {
     createEmployee,
     editEmployee,
 } from '@/actions/App/Http/Controllers/AdvanceController';
+import DataTable from '@/components/DataTable.vue';
+import DataTableFilter from '@/components/DataTableFilter.vue';
+import DataTableMonth from '@/components/DataTableMonth.vue';
+import DataTablePagination from '@/components/DataTablePagination.vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,8 +26,9 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
+import { paymentOptions } from '@/lib/cash-movement';
 import { formatUsd } from '@/lib/money';
+import type { DataTableColumn, DataTablePage } from '@/types/data-table';
 
 type Employee = {
     id: number;
@@ -50,14 +56,13 @@ type Advance = {
 
 const props = defineProps<{
     employees: Employee[];
-    history: {
-        data: Advance[];
-        prev_page_url: string | null;
-        next_page_url: string | null;
-        current_page: number;
-        last_page: number;
+    history: DataTablePage<Advance>;
+    filters: {
+        employee?: string | number;
+        status?: string;
+        month?: string;
+        payment_method?: string;
     };
-    filters: { employee?: string | number; status?: string; month?: string };
     limitCents: number;
 }>();
 
@@ -71,13 +76,161 @@ const date = new Intl.DateTimeFormat('es-EC', {
 });
 const available = (employee: Employee) =>
     Math.max(0, props.limitCents - employee.pendingCents);
-const filter = ref({
-    employee: String(props.filters.employee ?? ''),
-    status: props.filters.status ?? '',
+const all = 'all';
+const filter = useForm({
+    employee: String(props.filters.employee ?? all),
+    status: props.filters.status ?? all,
+    payment_method: props.filters.payment_method ?? all,
     month: props.filters.month ?? '',
 });
-const hasActiveFilters = () =>
-    Boolean(filter.value.employee || filter.value.status || filter.value.month);
+const hasActiveFilters = computed(() =>
+    Object.values(props.filters).some(Boolean),
+);
+const filterFields = computed(() => [
+    {
+        name: 'employee' as const,
+        label: 'Empleado',
+        options: [
+            { value: all, label: 'Todos los empleados' },
+            ...props.employees.map(({ id, name }) => ({
+                value: String(id),
+                label: name,
+            })),
+        ],
+    },
+    {
+        name: 'status' as const,
+        label: 'Estado',
+        options: [
+            { value: all, label: 'Todos los estados' },
+            { value: 'pending', label: 'Pendiente' },
+            { value: 'deducted', label: 'Descontado' },
+        ],
+    },
+    {
+        name: 'payment_method' as const,
+        label: 'Forma de pago',
+        options: [
+            { value: all, label: 'Todas las formas de pago' },
+            ...paymentOptions,
+        ],
+    },
+]);
+
+function changeFilter(
+    name: 'employee' | 'status' | 'payment_method' | 'month',
+    value: string,
+): void {
+    filter[name] = value;
+    filter
+        .transform((fields) =>
+            Object.fromEntries(
+                Object.entries(fields).filter(
+                    ([, field]) => field && field !== all,
+                ),
+            ),
+        )
+        .get(index().url, { preserveScroll: true, preserveState: false });
+}
+
+const historyRows = computed(() =>
+    props.history.data.map((advance) => {
+        const movement = advance.cash_movement;
+        const account = movement?.bank_account;
+
+        return {
+            id: advance.id,
+            employee: advance.employee_name,
+            date: advance.issued_on.slice(0, 10).split('-').reverse().join('/'),
+            amount: formatUsd(advance.amount_cents),
+            status: advance.deducted_at
+                ? { variant: 'success' as const, label: 'Descontado' }
+                : {
+                      variant: 'warning' as const,
+                      label: 'Pendiente de descuento',
+                  },
+            payment: [
+                movement?.payment_method === 'transfer'
+                    ? 'Transferencia bancaria'
+                    : 'Efectivo',
+                ...(account ? [account.bank.name + ' · ' + account.name] : []),
+                ...(movement?.voucher ? ['Voucher ' + movement.voucher] : []),
+            ],
+            record: [
+                'Registró ' + advance.recorder_name,
+                'Entregó ' + advance.responsible,
+                ...(advance.deducted_at
+                    ? [
+                          'Descuento · ' +
+                              date.format(new Date(advance.deducted_at)) +
+                              (advance.deductor_name
+                                  ? ' · ' + advance.deductor_name
+                                  : ''),
+                      ]
+                    : []),
+                ...(advance.note ? [advance.note] : []),
+            ],
+        };
+    }),
+);
+
+type HistoryRow = (typeof historyRows.value)[number];
+
+function historyDetails(lines: string[]) {
+    return h(
+        'div',
+        {
+            class: 'flex max-w-56 flex-col gap-1 whitespace-normal wrap-anywhere',
+        },
+        lines.map((line, index) =>
+            h(
+                'p',
+                {
+                    class:
+                        index === 0
+                            ? 'font-medium'
+                            : 'text-xs text-muted-foreground',
+                },
+                line,
+            ),
+        ),
+    );
+}
+
+const historyColumns: DataTableColumn<HistoryRow>[] = [
+    { id: 'date', header: 'Fecha', accessorKey: 'date' },
+    {
+        id: 'employee',
+        header: 'Empleado',
+        cell: ({ row }) => historyDetails([row.original.employee]),
+    },
+    {
+        id: 'payment',
+        header: 'Forma de pago',
+        cell: ({ row }) => historyDetails(row.original.payment),
+    },
+    {
+        id: 'record',
+        header: 'Registro',
+        cell: ({ row }) => historyDetails(row.original.record),
+    },
+    {
+        id: 'status',
+        header: 'Estado',
+        cell: ({
+            row: {
+                original: { status },
+            },
+        }) => h(Badge, { variant: status.variant }, () => status.label),
+    },
+    {
+        id: 'amount',
+        header: 'Importe',
+        accessorKey: 'amount',
+        meta: { align: 'right' },
+    },
+];
+
 const selectedEmployee = ref<Employee>();
 const dialogOpen = ref(false);
 const deductForm = useForm({ latest_pending_id: null as number | null });
@@ -99,25 +252,6 @@ function confirmDeduction(): void {
             dialogOpen.value = false;
         },
     });
-}
-
-function applyFilters(): void {
-    router.get(
-        index().url,
-        {
-            ...(filter.value.employee
-                ? { employee: filter.value.employee }
-                : {}),
-            ...(filter.value.status ? { status: filter.value.status } : {}),
-            ...(filter.value.month ? { month: filter.value.month } : {}),
-        },
-        { preserveState: true, preserveScroll: true },
-    );
-}
-
-function clearFilters(): void {
-    filter.value = { employee: '', status: '', month: '' };
-    router.get(index().url, {}, { preserveState: true, preserveScroll: true });
 }
 </script>
 
@@ -172,18 +306,18 @@ function clearFilters(): void {
                                 Pendiente de descuento
                             </dt>
                             <dd
-                                :class="[
-                                    'text-lg font-semibold tabular-nums',
-                                    employee.pendingCents
-                                        ? 'text-amber-800 dark:text-amber-300'
-                                        : '',
-                                ]"
+                                class="text-lg font-semibold tabular-nums"
+                                :class="{
+                                    'text-warning-foreground':
+                                        employee.pendingCents,
+                                }"
                             >
                                 {{ formatUsd(employee.pendingCents) }}
                             </dd>
                             <Badge
                                 v-if="employee.pendingCents"
-                                class="mt-1 border-amber-300 bg-amber-100 text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100"
+                                variant="warning"
+                                class="mt-1"
                             >
                                 Pendiente de descuento
                             </Badge>
@@ -227,194 +361,100 @@ function clearFilters(): void {
         </section>
 
         <section
-            v-if="employees.length"
-            class="space-y-4"
+            v-if="employees.length || historyRows.length"
+            class="flex flex-col gap-4"
             aria-labelledby="advance-history"
         >
-            <div>
-                <h2 id="advance-history" class="text-lg font-semibold">
-                    Historial
-                </h2>
-                <p class="text-sm text-muted-foreground">
-                    Los filtros se aplican solo al historial.
-                </p>
-            </div>
-            <form
-                class="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto_auto]"
-                @submit.prevent="applyFilters"
+            <h2 id="advance-history" class="text-lg font-semibold">
+                Historial de adelantos
+            </h2>
+
+            <div
+                class="flex flex-wrap items-center gap-2"
+                aria-label="Filtros del historial"
             >
-                <div class="grid gap-1.5">
-                    <Label for="advance-employee-filter">Empleado</Label>
-                    <select
-                        id="advance-employee-filter"
-                        v-model="filter.employee"
-                        class="min-h-11 rounded-md border bg-background px-3 text-sm"
-                    >
-                        <option value="">Todos</option>
-                        <option
-                            v-for="employee in employees"
-                            :key="employee.id"
-                            :value="String(employee.id)"
-                        >
-                            {{ employee.name }}
-                        </option>
-                    </select>
-                </div>
-                <div class="grid gap-1.5">
-                    <Label for="advance-month-filter">Mes calendario</Label>
-                    <input
-                        id="advance-month-filter"
-                        v-model="filter.month"
-                        type="month"
-                        class="min-h-11 rounded-md border bg-background px-3 text-sm"
-                    />
-                </div>
-                <div class="grid gap-1.5">
-                    <Label for="advance-status-filter">Estado</Label>
-                    <select
-                        id="advance-status-filter"
-                        v-model="filter.status"
-                        class="min-h-11 rounded-md border bg-background px-3 text-sm"
-                    >
-                        <option value="">Todos</option>
-                        <option value="pending">Pendiente de descuento</option>
-                        <option value="deducted">Descontado</option>
-                    </select>
-                </div>
-                <Button type="submit" variant="outline" class="min-h-11"
-                    >Filtrar historial</Button
-                >
+                <DataTableMonth
+                    :month="filter.month"
+                    :disabled="filter.processing"
+                    @apply="changeFilter('month', $event)"
+                />
+                <DataTableFilter
+                    v-for="field in filterFields"
+                    :key="field.name"
+                    :title="field.label"
+                    :options="field.options"
+                    :model-value="filter[field.name]"
+                    :disabled="filter.processing"
+                    @update:model-value="changeFilter(field.name, $event)"
+                />
                 <Button
-                    type="button"
+                    v-if="hasActiveFilters"
+                    as-child
                     variant="ghost"
-                    class="min-h-11"
-                    :disabled="!hasActiveFilters()"
-                    @click="clearFilters"
+                    size="sm"
+                    class="min-h-10"
                 >
-                    Limpiar filtros
+                    <Link :href="index()" preserve-scroll>
+                        Limpiar <X data-icon="inline-end" aria-hidden="true" />
+                    </Link>
                 </Button>
-            </form>
-            <p
-                v-if="!history.data.length"
-                class="rounded-lg border p-4 text-sm text-muted-foreground"
-            >
+            </div>
+
+            <p v-if="!historyRows.length" class="text-sm text-muted-foreground">
                 No hay adelantos para esta selección.
             </p>
-            <ul v-else class="divide-y rounded-lg border">
-                <li
-                    v-for="advance in history.data"
-                    :key="advance.id"
-                    :class="[
-                        'grid gap-2 border-l-4 p-3 sm:grid-cols-[1fr_auto] sm:p-4',
-                        advance.deducted_at
-                            ? 'border-l-transparent'
-                            : 'border-l-amber-500 bg-amber-50/70 dark:bg-amber-950/20',
-                    ]"
-                >
-                    <div class="min-w-0 space-y-1">
-                        <p class="font-medium break-words">
-                            {{ advance.employee_name }}
-                        </p>
-                        <p class="text-sm text-muted-foreground">
-                            Fecha del adelanto ·
-                            {{
-                                advance.issued_on
-                                    .slice(0, 10)
-                                    .split('-')
-                                    .reverse()
-                                    .join('/')
-                            }}
-                        </p>
-                        <p class="text-sm break-words text-muted-foreground">
-                            Entregó {{ advance.responsible }} · Registró
-                            {{ advance.recorder_name }}
-                        </p>
-                        <p class="text-sm text-muted-foreground">
-                            <template
-                                v-if="advance.cash_movement?.bank_account"
+            <template v-else>
+                <div class="hidden lg:block">
+                    <DataTable
+                        caption="Historial de adelantos"
+                        :rows="historyRows"
+                        :columns="historyColumns"
+                    />
+                </div>
+                <ul class="divide-y border-y lg:hidden">
+                    <li
+                        v-for="row in historyRows"
+                        :key="row.id"
+                        class="flex min-w-0 flex-col gap-2 py-3"
+                    >
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex min-w-0 flex-col gap-0.5">
+                                <p class="font-medium wrap-anywhere">
+                                    {{ row.employee }}
+                                </p>
+                                <p class="text-xs text-muted-foreground">
+                                    {{ row.date }}
+                                </p>
+                            </div>
+                            <span
+                                class="font-semibold whitespace-nowrap tabular-nums"
+                                >{{ row.amount }}</span
                             >
-                                Transferencia ·
-                                {{
-                                    advance.cash_movement.bank_account.bank.name
-                                }}
-                                · {{ advance.cash_movement.bank_account.name }}
-                                <template v-if="advance.cash_movement.voucher">
-                                    · Voucher
-                                    {{ advance.cash_movement.voucher }}
-                                </template>
-                            </template>
-                            <template v-else>Efectivo</template>
-                        </p>
-                        <p v-if="advance.note" class="text-sm break-words">
-                            {{ advance.note }}
-                        </p>
-                        <p
-                            v-if="advance.deducted_at"
-                            class="text-sm break-words text-muted-foreground"
+                        </div>
+                        <Badge :variant="row.status.variant">{{
+                            row.status.label
+                        }}</Badge>
+                        <div
+                            class="flex min-w-0 flex-col gap-0.5 text-xs wrap-anywhere text-muted-foreground"
                         >
-                            Descuento ·
-                            {{ date.format(new Date(advance.deducted_at)) }} ·
-                            {{ advance.deductor_name }}
-                        </p>
-                    </div>
-                    <div
-                        class="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end"
-                    >
-                        <span class="font-semibold tabular-nums">{{
-                            formatUsd(advance.amount_cents)
-                        }}</span>
-                        <Badge
-                            :class="
-                                advance.deducted_at
-                                    ? 'border-emerald-300 bg-emerald-100 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100'
-                                    : 'border-amber-300 bg-amber-100 font-semibold text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100'
-                            "
-                        >
-                            {{
-                                advance.deducted_at
-                                    ? 'Descontado'
-                                    : 'Pendiente de descuento'
-                            }}
-                        </Badge>
-                    </div>
-                </li>
-            </ul>
-            <nav
-                v-if="history.last_page > 1"
-                aria-label="Páginas del historial"
-                class="flex flex-col items-center justify-between gap-2 sm:flex-row"
-            >
-                <Button
-                    v-if="history.prev_page_url"
-                    variant="outline"
-                    class="min-h-11 w-full sm:w-auto"
-                    as-child
-                >
-                    <Link
-                        :href="history.prev_page_url"
-                        preserve-scroll
-                        preserve-state
-                        >Anterior</Link
-                    >
-                </Button>
-                <span class="text-sm text-muted-foreground"
-                    >Página {{ history.current_page }} de
-                    {{ history.last_page }}</span
-                >
-                <Button
-                    v-if="history.next_page_url"
-                    variant="outline"
-                    class="min-h-11 w-full sm:w-auto"
-                    as-child
-                >
-                    <Link
-                        :href="history.next_page_url"
-                        preserve-scroll
-                        preserve-state
-                        >Siguiente</Link
-                    >
-                </Button>
-            </nav>
+                            <p
+                                v-for="(line, index) in row.payment"
+                                :key="index"
+                            >
+                                {{ line }}
+                            </p>
+                            <p v-for="(line, index) in row.record" :key="index">
+                                {{ line }}
+                            </p>
+                        </div>
+                    </li>
+                </ul>
+            </template>
+
+            <DataTablePagination
+                label="Páginas del historial de adelantos"
+                :page="history"
+            />
         </section>
 
         <Dialog

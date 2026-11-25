@@ -121,10 +121,11 @@ test('el panel concilia los saldos y enlaza únicamente transferencias, depósit
         ->where('movements.data.1.id', $olderTransfer->id));
     $this->get(route('movements.index', ['kind' => 'deposit', 'status' => 'in_transit']))
         ->assertInertia(fn (Assert $page) => $page
-            ->has('depositsInTransit', 1)
-            ->where('depositsInTransit.0.id', $inTransit->id));
+            ->has('depositsInTransit.data', 1)
+            ->where('depositsInTransit.data.0.id', $inTransit->id));
     $this->get(route('cash-closings.index', ['difference' => 'shortage', 'resolution' => 'pending']))
         ->assertInertia(fn (Assert $page) => $page
+            ->where('closings.per_page', 10)
             ->has('closings.data', 1)
             ->where('closings.data.0.differenceCents', -350));
 });

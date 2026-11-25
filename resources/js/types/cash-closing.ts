@@ -1,3 +1,5 @@
+import type { DataTablePage } from '@/types/data-table';
+
 export type CashShortageResolution = {
     at: string;
     by: string | null;
@@ -27,11 +29,7 @@ export type CashClosingRecord = {
     resolution: CashShortageResolution | null;
 };
 
-export type CashClosingPage = {
-    data: CashClosingRecord[];
-    prev_page_url: string | null;
-    next_page_url: string | null;
-};
+export type CashClosingPage = DataTablePage<CashClosingRecord>;
 
 export type CashHistoryFilters = {
     date_from: string | null;

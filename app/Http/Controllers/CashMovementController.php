@@ -74,6 +74,9 @@ class CashMovementController extends Controller
                 ->where('kind', '!=', 'deposit')->orWhereNotNull('confirmed_at')->orWhereNotNull('returned_at'));
         }
 
+        $records->with(self::BANK_RELATIONS)->latest('id');
+        $serialize = fn (CashMovement $movement): array => $this->movementData($movement, $user);
+
         return Inertia::render('CashMovements', [
             'date' => $date,
             'dateRange' => $date === null ? null : ['from' => $date, 'to' => $dateTo, 'explicit' => $explicitRange],
@@ -94,13 +97,13 @@ class CashMovementController extends Controller
                     ->map(fn (BankAccount $account): array => ['id' => $account->id, 'name' => $account->displayName()]),
             ],
             'balances' => $calculateCashBalances->handle($canManageDeposits),
-            'movements' => $records
-                ->with(self::BANK_RELATIONS)
-                ->latest('id')->paginate(20)->withQueryString()->through(fn (CashMovement $movement): array => $this->movementData($movement, $user)),
+            'movements' => $user->is_admin
+                ? $records->paginate(self::TABLE_PAGE_SIZE)->onEachSide(1)->withQueryString()->through($serialize)
+                : ['data' => $records->get()->map($serialize)],
             'depositsInTransit' => $canManageDeposits
-                ? $filtered->withStatus('in_transit')
-                    ->with(self::BANK_RELATIONS)->oldest('id')->get()->map(fn (CashMovement $movement): array => $this->movementData($movement, $user))
-                : [],
+                ? $filtered->withStatus('in_transit')->with(self::BANK_RELATIONS)->oldest('id')
+                    ->paginate(self::TABLE_PAGE_SIZE, pageName: 'transit_page')->onEachSide(1)->withQueryString()->through($serialize)
+                : null,
         ]);
     }
 
@@ -131,7 +134,7 @@ class CashMovementController extends Controller
         return $query->withStatus($filters['status'] ?? null);
     }
 
-    public function create(Request $request): Response
+    public function create(Request $request, CalculateCashBalances $calculateCashBalances): Response
     {
         $restriction = CashShift::movementRestriction($request->user(), CashShift::active());
         abort_if($restriction !== null, 403, $restriction ?? '');

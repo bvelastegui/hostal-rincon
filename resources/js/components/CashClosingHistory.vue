@@ -421,9 +421,8 @@ function saveResolution() {
             </ul>
         </template>
         <DataTablePagination
-            label="Páginas del historial"
-            :previous="closings.prev_page_url"
-            :next="closings.next_page_url"
+            label="Páginas del historial de caja"
+            :page="closings"
         />
         <Dialog v-model:open="dialogOpen">
             <DialogContent v-if="selected">
