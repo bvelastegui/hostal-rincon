@@ -39,6 +39,7 @@ defineOptions({
 
         <Form
             v-bind="SecurityController.update.form()"
+            autocomplete="off"
             :options="{
                 preserveScroll: true,
             }"
@@ -57,7 +58,6 @@ defineOptions({
                     id="current_password"
                     name="current_password"
                     class="mt-1 block w-full"
-                    autocomplete="current-password"
                     placeholder="Contraseña actual"
                 />
                 <InputError :message="errors.current_password" />
@@ -69,7 +69,6 @@ defineOptions({
                     id="password"
                     name="password"
                     class="mt-1 block w-full"
-                    autocomplete="new-password"
                     placeholder="Nueva contraseña"
                     :passwordrules="props.passwordRules"
                 />
@@ -82,7 +81,6 @@ defineOptions({
                     id="password_confirmation"
                     name="password_confirmation"
                     class="mt-1 block w-full"
-                    autocomplete="new-password"
                     placeholder="Confirmar contraseña"
                     :passwordrules="props.passwordRules"
                 />

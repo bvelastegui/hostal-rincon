@@ -30,6 +30,7 @@ const inputEmail = ref(props.email);
 
     <Form
         v-bind="update.form()"
+        autocomplete="off"
         :transform="(data) => ({ ...data, token, email })"
         :reset-on-success="['password', 'password_confirmation']"
         v-slot="{ errors, processing }"
@@ -54,7 +55,6 @@ const inputEmail = ref(props.email);
                 <PasswordInput
                     id="password"
                     name="password"
-                    autocomplete="new-password"
                     class="mt-1 block w-full"
                     autofocus
                     placeholder="Contraseña"
@@ -70,7 +70,6 @@ const inputEmail = ref(props.email);
                 <PasswordInput
                     id="password_confirmation"
                     name="password_confirmation"
-                    autocomplete="new-password"
                     class="mt-1 block w-full"
                     placeholder="Confirmar contraseña"
                     :passwordrules="passwordRules"

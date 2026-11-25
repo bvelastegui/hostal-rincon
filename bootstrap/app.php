@@ -3,6 +3,7 @@
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\PreventSearchIndexing;
+use App\Http\Middleware\ProtectSharedBrowserSession;
 use App\Http\Middleware\RestrictEmployeeDuringCashShift;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->web(append: [
+            ProtectSharedBrowserSession::class,
             HandleAppearance::class,
             RestrictEmployeeDuringCashShift::class,
             HandleInertiaRequests::class,

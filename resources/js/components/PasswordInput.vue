@@ -28,6 +28,7 @@ defineExpose({
             ref="inputRef"
             :type="showPassword ? 'text' : 'password'"
             :class="cn('pr-10', props.class)"
+            autocomplete="off"
             v-bind="$attrs"
         />
         <button

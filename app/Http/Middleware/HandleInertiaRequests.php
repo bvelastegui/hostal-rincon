@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\CashShift;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Inertia\Inertia;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -38,6 +39,7 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = $request->user();
+        Inertia::encryptHistory($user !== null);
         $activeShift = $user?->is_admin ? CashShift::active() : null;
 
         return [

@@ -4,6 +4,12 @@ El proyecto usa versionamiento semántico (`MAJOR.MINOR.PATCH`). Incrementa `MAJ
 
 Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la fecha en formato `AAAA-MM-DD` y etiqueta el commit de la entrega con `vMAJOR.MINOR.PATCH`.
 
+## 0.5.0 (prevista)
+
+- **Cambiar de sesión** ofrece perfiles guardados de forma opcional en el navegador compartido. Cada perfil conserva solo el nombre y el correo, y pide la contraseña al entrar. [HR-8](https://nexodigital.youtrack.cloud/issue/HR-8)
+- El inicio de sesión desactiva **Recordarme**, descarta las cookies persistentes antiguas y protege el historial autenticado al salir o entregar el turno. Los formularios solicitan desactivar el autocompletado; el guardado y el relleno del gestor de contraseñas se controlan en el navegador del equipo.
+- Al confirmar la recepción de caja, se abre la pestaña **Movimientos** del turno entrante. [HR-15](https://nexodigital.youtrack.cloud/issue/HR-15)
+
 ## 0.4.0 (prevista)
 
 ### Cierre de caja

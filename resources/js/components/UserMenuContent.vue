@@ -39,7 +39,7 @@ const page = usePage();
     <DropdownMenuItem :as-child="true">
         <LogoutLink class="w-full cursor-pointer" data-test="logout-button">
             <LogOut class="mr-2 h-4 w-4" />
-            Cerrar sesión
+            Cambiar de sesión
         </LogoutLink>
     </DropdownMenuItem>
 </template>
