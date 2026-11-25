@@ -489,7 +489,7 @@ function submit() {
                 variant="ghost"
                 class="min-h-11 sm:self-start lg:hidden"
             >
-                <LogoutLink>Cerrar sesión</LogoutLink>
+                <LogoutLink>Cambiar de sesión</LogoutLink>
             </Button>
         </section>
 

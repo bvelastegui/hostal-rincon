@@ -91,7 +91,7 @@ const user = computed(() => page.props.auth.user);
         >
             <LogoutLink data-test="profile-logout-button">
                 <LogOut data-icon="inline-start" aria-hidden="true" />
-                Cerrar sesión
+                Cambiar de sesión
             </LogoutLink>
         </Button>
     </div>
