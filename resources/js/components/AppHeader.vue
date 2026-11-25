@@ -21,6 +21,7 @@ import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
 import { useMainNavigation } from '@/composables/useMainNavigation';
 import { dashboard } from '@/routes';
+import { index as cashShift } from '@/routes/cash-closings';
 import type { BreadcrumbItem } from '@/types';
 
 type Props = {
@@ -45,7 +46,10 @@ const mainNavItems = useMainNavigation();
     <div class="hidden lg:block">
         <div class="border-b border-sidebar-border/80">
             <div class="app-container flex h-16 items-center">
-                <Link :href="dashboard()" class="flex items-center gap-x-2">
+                <Link
+                    :href="auth.cashShiftAccess ? cashShift() : dashboard()"
+                    class="flex items-center gap-x-2"
+                >
                     <AppLogo />
                 </Link>
 
@@ -84,7 +88,7 @@ const mainNavItems = useMainNavigation();
                     </NavigationMenu>
                 </div>
 
-                <div class="ml-auto">
+                <div class="ml-auto shrink-0">
                     <DropdownMenu>
                         <DropdownMenuTrigger :as-child="true">
                             <Button

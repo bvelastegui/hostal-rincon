@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 import { UserRound } from '@lucide/vue';
 import { computed } from 'vue';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { useMainNavigation } from '@/composables/useMainNavigation';
 import { edit as editProfile } from '@/routes/profile';
 
 const mainNavItems = useMainNavigation();
+const page = usePage();
 const { isCurrentOrParentUrl } = useCurrentUrl();
 
 const items = computed(() => [
@@ -15,12 +16,16 @@ const items = computed(() => [
         ...item,
         active: isCurrentOrParentUrl(item.href),
     })),
-    {
-        title: 'Perfil',
-        href: editProfile(),
-        icon: UserRound,
-        active: isCurrentOrParentUrl('/settings/'),
-    },
+    ...(!page.props.auth.cashShiftAccess
+        ? [
+              {
+                  title: 'Perfil',
+                  href: editProfile(),
+                  icon: UserRound,
+                  active: isCurrentOrParentUrl('/settings/'),
+              },
+          ]
+        : []),
 ]);
 </script>
 

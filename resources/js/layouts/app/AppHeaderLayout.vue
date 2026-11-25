@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ActiveCashShiftIndicator from '@/components/ActiveCashShiftIndicator.vue';
 import AppBottomNavigation from '@/components/AppBottomNavigation.vue';
 import AppContent from '@/components/AppContent.vue';
 import AppHeader from '@/components/AppHeader.vue';
@@ -18,6 +19,7 @@ withDefaults(defineProps<Props>(), {
 <template>
     <AppShell variant="header">
         <AppHeader :breadcrumbs="breadcrumbs" />
+        <ActiveCashShiftIndicator />
         <AppContent variant="header">
             <slot />
         </AppContent>

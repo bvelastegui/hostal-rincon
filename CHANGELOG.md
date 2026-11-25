@@ -4,6 +4,24 @@ El proyecto usa versionamiento semántico (`MAJOR.MINOR.PATCH`). Incrementa `MAJ
 
 Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la fecha en formato `AAAA-MM-DD` y etiqueta el commit de la entrega con `vMAJOR.MINOR.PATCH`.
 
+## 0.4.0 (prevista)
+
+### Cierre de caja
+
+- La administradora puede asignar el turno y registrar cortes independientes. El historial identifica al responsable de caja y a quien confirmó el conteo.
+- La persona saliente registra el efectivo entregado y la entrante registra cuánto recibe. El conteo de recepción abre la caja del nuevo turno. Las diferencias requieren una observación y ajustan el saldo al efectivo contado. [HR-15](https://nexodigital.youtrack.cloud/issue/HR-15)
+- Solo la persona responsable de la caja abierta puede registrar y confirmar movimientos. La administradora puede registrar movimientos y cortes incluso durante el relevo.
+- Turno tiene su propia entrada en el menú. Los operadores consultan únicamente los movimientos de su turno en curso y la administradora puede consultar los de cualquier fecha.
+- Durante un turno abierto, los empleados solo acceden a Turno y, si son responsables de la caja, también a Movimientos. El cierre administrativo finaliza el turno y registra el efectivo, el motivo, el responsable y quién lo autorizó.
+- Cuando la caja queda libre, un empleado puede contar el efectivo inicial y abrir su propio turno. Hasta que lo abra, solo puede acceder a Turno y cerrar sesión.
+- La administradora puede filtrar el historial de caja y documentar la resolución de los faltantes, incluidos los descuentos ya aplicados. El registro de resolución no cambia el saldo de caja.
+
+### Movimientos y QA
+
+- Movimientos e Historial de caja usan tablas de shadcn-vue en escritorio y listas compactas en móvil. Movimientos permite combinar rango de fechas, tipo, autor, estado y cuenta o efectivo.
+- La administradora ve una franja con el responsable de la caja y el estado del turno.
+- Staging puede cargar dos meses de operación ficticia con turnos de ocho horas, reemplazo de un empleado, efectivo de hasta USD 200, excedentes al banco y faltantes pendientes y resueltos. `StagingSeeder` requiere una base de operación vacía y una contraseña de QA configurada en el servidor.
+
 ## 0.3.0 (prevista)
 
 ### Adelantos y empleados

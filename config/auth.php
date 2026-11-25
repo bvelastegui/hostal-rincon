@@ -5,6 +5,7 @@ use App\Models\User;
 return [
 
     'superadmin_password' => env('SUPERADMIN_PASSWORD'),
+    'staging_demo_employee_password' => env('STAGING_DEMO_EMPLOYEE_PASSWORD'),
 
     /*
     |--------------------------------------------------------------------------

@@ -20,12 +20,17 @@ defineOptions({
 
 defineProps<{
     status?: string;
+    handoff?: string;
     canResetPassword: boolean;
 }>();
 </script>
 
 <template>
     <Head title="Iniciar sesión" />
+
+    <p v-if="handoff" class="mb-4 text-center text-sm font-medium">
+        {{ handoff }}
+    </p>
 
     <div
         v-if="status"

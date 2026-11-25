@@ -3,6 +3,7 @@ export type PaymentMethod = 'cash' | 'transfer';
 
 export type CashMovement = {
     id: number;
+    shiftId: number | null;
     kind: MovementKind;
     paymentMethod: PaymentMethod;
     amountCents: number;

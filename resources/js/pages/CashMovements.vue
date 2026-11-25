@@ -1,18 +1,25 @@
 <script setup lang="ts">
-import { Form, Head, Link } from '@inertiajs/vue3';
-import { ArrowDownLeft, ArrowUpRight, Landmark } from '@lucide/vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ArrowDownLeft, ArrowUpRight, Landmark, X } from '@lucide/vue';
 import { computed } from 'vue';
 import CashMovementList from '@/components/CashMovementList.vue';
+import CashMovementsTable from '@/components/CashMovementsTable.vue';
+import DataTableDateRange from '@/components/DataTableDateRange.vue';
+import DataTableFilter from '@/components/DataTableFilter.vue';
+import DataTablePagination from '@/components/DataTablePagination.vue';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { movementLabels } from '@/lib/cash-movement';
 import { formatUsd } from '@/lib/money';
+import { index as cashClosings } from '@/routes/cash-closings';
 import { create, index } from '@/routes/movements';
 import type { CashMovement } from '@/types/cash-movement';
 
 const props = defineProps<{
-    date: string;
+    date: string | null;
+    dateRange: { from: string; to: string; explicit: boolean } | null;
+    shiftId: number | null;
     canManageDeposits: boolean;
+    movementRestriction: string | null;
     balances: {
         cash: number | null;
         bank: number;
@@ -20,6 +27,16 @@ const props = defineProps<{
         total: number | null;
     };
     depositsInTransit: CashMovement[];
+    filters: {
+        kind: string | null;
+        recorded_by: number | null;
+        status: string | null;
+        source: string | null;
+    };
+    filterOptions: {
+        recorders: { id: number; name: string }[];
+        accounts: { id: number; name: string }[];
+    };
     movements: {
         data: CashMovement[];
         prev_page_url: string | null;
@@ -30,6 +47,105 @@ const props = defineProps<{
 defineOptions({
     layout: { breadcrumbs: [{ title: 'Movimientos', href: index() }] },
 });
+
+const all = 'all';
+const search = useForm({
+    date: props.dateRange?.explicit ? '' : (props.date ?? ''),
+    date_from: props.dateRange?.explicit ? props.dateRange.from : '',
+    date_to: props.dateRange?.explicit ? props.dateRange.to : '',
+    kind: props.filters.kind ?? all,
+    recorded_by: props.filters.recorded_by?.toString() ?? all,
+    status: props.filters.status ?? all,
+    source: props.filters.source ?? all,
+});
+const hasFilters = computed(
+    () =>
+        props.dateRange?.explicit ||
+        Object.values(props.filters).some((value) => value !== null),
+);
+const multipleDates = computed(
+    () =>
+        props.dateRange !== null && props.dateRange.from !== props.dateRange.to,
+);
+const filterFields = computed(() => [
+    {
+        name: 'kind' as const,
+        label: 'Tipo',
+        options: [
+            { value: all, label: 'Todos los tipos' },
+            { value: 'income', label: movementLabels.income },
+            { value: 'expense', label: movementLabels.expense },
+            ...(props.canManageDeposits
+                ? [{ value: 'deposit', label: 'Depósito' }]
+                : []),
+        ],
+    },
+    {
+        name: 'recorded_by' as const,
+        label: 'Registrado por',
+        options: [
+            { value: all, label: 'Todas las personas' },
+            ...props.filterOptions.recorders.map(({ id, name }) => ({
+                value: String(id),
+                label: name,
+            })),
+        ],
+    },
+    {
+        name: 'status' as const,
+        label: 'Estado',
+        options: [
+            { value: all, label: 'Todos los estados' },
+            { value: 'pending', label: 'Pendiente' },
+            { value: 'confirmed', label: 'Confirmado' },
+            ...(props.canManageDeposits
+                ? [
+                      { value: 'in_transit', label: 'En tránsito' },
+                      { value: 'returned', label: 'Devuelto' },
+                  ]
+                : []),
+        ],
+    },
+    {
+        name: 'source' as const,
+        label: 'Cuenta o efectivo',
+        options: [
+            { value: all, label: 'Todas las fuentes' },
+            { value: 'cash', label: 'Efectivo' },
+            ...props.filterOptions.accounts.map(({ id, name }) => ({
+                value: 'bank:' + id,
+                label: name,
+            })),
+        ],
+    },
+]);
+
+function applyFilters() {
+    search
+        .transform((data) =>
+            Object.fromEntries(
+                Object.entries(data).filter(
+                    ([, value]) => value && value !== all,
+                ),
+            ),
+        )
+        .get(index().url, { preserveScroll: true, preserveState: false });
+}
+
+function changeFilter(
+    name: (typeof filterFields.value)[number]['name'],
+    value: string,
+) {
+    search[name] = value;
+    applyFilters();
+}
+
+function changeDate(range: { from: string; to: string } | null) {
+    search.date = '';
+    search.date_from = range?.from ?? '';
+    search.date_to = range?.to ?? '';
+    applyFilters();
+}
 
 const balances = computed(() => [
     { label: 'Efectivo', cents: props.balances.cash },
@@ -49,14 +165,18 @@ const balances = computed(() => [
         <Head title="Movimientos" />
 
         <header
-            class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+            class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
         >
             <h1 class="text-2xl font-semibold tracking-tight">Movimientos</h1>
             <div
                 class="grid grid-cols-2 gap-2"
                 :class="{ 'sm:grid-cols-3': canManageDeposits }"
             >
-                <Button as-child class="min-h-11 px-2 sm:px-4">
+                <Button
+                    v-if="!movementRestriction"
+                    as-child
+                    class="min-h-11 px-2 sm:px-4"
+                >
                     <Link :href="create({ query: { kind: 'income' } })">
                         <ArrowDownLeft
                             data-icon="inline-start"
@@ -66,6 +186,7 @@ const balances = computed(() => [
                     </Link>
                 </Button>
                 <Button
+                    v-if="!movementRestriction"
                     as-child
                     variant="outline"
                     class="min-h-11 px-2 sm:px-4"
@@ -82,7 +203,7 @@ const balances = computed(() => [
                     as-child
                     variant="outline"
                     v-if="canManageDeposits"
-                    class="col-span-2 min-h-11 px-2 sm:col-span-1 sm:px-4"
+                    class="min-h-11 px-2 sm:px-4"
                 >
                     <Link :href="create({ query: { kind: 'deposit' } })">
                         <Landmark data-icon="inline-start" aria-hidden="true" />
@@ -91,6 +212,18 @@ const balances = computed(() => [
                 </Button>
             </div>
         </header>
+        <p
+            v-if="movementRestriction"
+            class="border-y py-3 text-sm text-muted-foreground"
+            role="status"
+        >
+            {{ movementRestriction }}
+            <Link
+                :href="cashClosings()"
+                class="font-medium text-foreground underline underline-offset-4"
+                >Ver turno de caja</Link
+            >
+        </p>
 
         <section
             aria-labelledby="movement-balances"
@@ -124,6 +257,42 @@ const balances = computed(() => [
             </dl>
         </section>
 
+        <div
+            v-if="!movementRestriction"
+            class="flex flex-wrap items-center gap-2"
+            role="group"
+            aria-label="Filtros de movimientos"
+        >
+            <DataTableDateRange
+                v-if="dateRange"
+                :from="dateRange.from"
+                :to="dateRange.to"
+                :disabled="search.processing"
+                @apply="changeDate"
+            />
+            <DataTableFilter
+                v-for="field in filterFields"
+                :key="field.name"
+                :model-value="search[field.name]"
+                :title="field.label"
+                :options="field.options"
+                :disabled="search.processing"
+                @update:model-value="(value) => changeFilter(field.name, value)"
+            />
+            <Button
+                v-if="hasFilters || date"
+                as-child
+                variant="ghost"
+                size="sm"
+                class="min-h-10"
+            >
+                <Link :href="index()" preserve-scroll>
+                    Limpiar
+                    <X data-icon="inline-end" aria-hidden="true" />
+                </Link>
+            </Button>
+        </div>
+
         <section
             v-if="depositsInTransit.length"
             aria-labelledby="transit-list"
@@ -132,73 +301,72 @@ const balances = computed(() => [
             <h2 id="transit-list" class="text-base font-semibold">
                 Depósitos en tránsito
             </h2>
-            <CashMovementList :movements="depositsInTransit" show-date />
+            <CashMovementList
+                class="lg:hidden"
+                :movements="depositsInTransit"
+                show-date
+            />
+            <div class="hidden lg:block">
+                <CashMovementsTable
+                    caption="Depósitos en tránsito"
+                    :movements="depositsInTransit"
+                    show-date
+                />
+            </div>
         </section>
 
-        <section aria-labelledby="movements-list" class="flex flex-col gap-3">
-            <div
-                class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
-            >
-                <h2 id="movements-list" class="text-base font-semibold">
-                    Registros del día
-                </h2>
-                <Form
-                    v-bind="index.form()"
-                    class="flex items-end gap-2"
-                    v-slot="{ processing }"
-                >
-                    <div class="grid min-w-0 flex-1 gap-1">
-                        <Label for="movement-date">Fecha</Label>
-                        <Input
-                            id="movement-date"
-                            :key="date"
-                            name="date"
-                            type="date"
-                            :default-value="date"
-                            class="min-h-11"
-                            required
-                        />
-                    </div>
-                    <Button
-                        variant="outline"
-                        type="submit"
-                        class="min-h-11"
-                        :disabled="processing"
-                        >Consultar</Button
-                    >
-                </Form>
-            </div>
+        <section
+            v-if="filters.status !== 'in_transit' || !depositsInTransit.length"
+            aria-labelledby="movements-list"
+            class="flex flex-col gap-3"
+        >
+            <h2 id="movements-list" class="text-base font-semibold">
+                {{
+                    date
+                        ? multipleDates
+                            ? 'Registros del período'
+                            : 'Registros del día'
+                        : shiftId
+                          ? 'Movimientos del turno #' + shiftId
+                          : 'Movimientos del turno'
+                }}
+            </h2>
 
-            <CashMovementList
-                v-if="movements.data.length"
-                :movements="movements.data"
-            />
+            <template v-if="movements.data.length">
+                <CashMovementList
+                    class="lg:hidden"
+                    :movements="movements.data"
+                    :show-date="date === null || multipleDates"
+                    :can-manage="!movementRestriction"
+                />
+                <div class="hidden lg:block">
+                    <CashMovementsTable
+                        :caption="
+                            date
+                                ? 'Registros de movimientos'
+                                : 'Movimientos del turno'
+                        "
+                        :movements="movements.data"
+                        :show-date="date === null || multipleDates"
+                        :can-manage="!movementRestriction"
+                    />
+                </div>
+            </template>
             <p v-else class="text-sm text-muted-foreground">
-                No hay movimientos registrados en esta fecha.
+                {{
+                    hasFilters
+                        ? 'No hay movimientos que coincidan con estos filtros.'
+                        : date
+                          ? 'No hay movimientos registrados en esta fecha.'
+                          : 'No hay movimientos para mostrar.'
+                }}
             </p>
 
-            <nav
-                v-if="movements.prev_page_url || movements.next_page_url"
-                aria-label="Páginas de movimientos"
-                class="flex flex-wrap gap-2"
-            >
-                <Button
-                    v-if="movements.prev_page_url"
-                    as-child
-                    variant="outline"
-                    class="min-h-11"
-                >
-                    <Link :href="movements.prev_page_url">Anterior</Link>
-                </Button>
-                <Button
-                    v-if="movements.next_page_url"
-                    as-child
-                    variant="outline"
-                    class="min-h-11"
-                >
-                    <Link :href="movements.next_page_url">Siguiente</Link>
-                </Button>
-            </nav>
+            <DataTablePagination
+                label="Páginas de movimientos"
+                :previous="movements.prev_page_url"
+                :next="movements.next_page_url"
+            />
         </section>
     </div>
 </template>

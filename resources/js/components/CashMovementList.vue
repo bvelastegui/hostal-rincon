@@ -2,23 +2,24 @@
 import { Link } from '@inertiajs/vue3';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatUsd } from '@/lib/money';
+import {
+    movementAction,
+    movementAmount,
+    movementLabels,
+    movementMethod,
+    movementStatus,
+} from '@/lib/cash-movement';
 import { edit } from '@/routes/movements';
-import type { CashMovement, MovementKind } from '@/types/cash-movement';
+import type { CashMovement } from '@/types/cash-movement';
 
-defineProps<{ movements: CashMovement[]; showDate?: boolean }>();
-
-const labels: Record<MovementKind, string> = {
-    income: 'Ingreso',
-    expense: 'Egreso',
-    deposit: 'Depósito de efectivo',
-};
-
-const signs: Record<MovementKind, string> = {
-    income: '+',
-    expense: '−',
-    deposit: '',
-};
+withDefaults(
+    defineProps<{
+        movements: CashMovement[];
+        showDate?: boolean;
+        canManage?: boolean;
+    }>(),
+    { canManage: true },
+);
 </script>
 
 <template>
@@ -33,14 +34,10 @@ const signs: Record<MovementKind, string> = {
                     {{ movement.description }}
                 </p>
                 <p class="text-xs wrap-break-word text-muted-foreground">
-                    {{ labels[movement.kind] }}
+                    {{ movementLabels[movement.kind] }}
                     <template v-if="movement.kind !== 'deposit'">
                         ·
-                        {{
-                            movement.paymentMethod === 'cash'
-                                ? 'Efectivo'
-                                : 'Transferencia'
-                        }}
+                        {{ movementMethod(movement) }}
                     </template>
                 </p>
                 <p
@@ -57,7 +54,8 @@ const signs: Record<MovementKind, string> = {
                     {{ movement.accountBankName }} · {{ movement.accountName }}
                 </p>
                 <p v-if="showDate" class="text-xs text-muted-foreground">
-                    Retiro del {{ movement.date }}
+                    {{ movement.kind === 'deposit' ? 'Retiro del' : 'Fecha:' }}
+                    {{ movement.date }}
                 </p>
                 <p
                     v-if="movement.kind === 'deposit' && movement.confirmedOn"
@@ -85,36 +83,32 @@ const signs: Record<MovementKind, string> = {
                 </p>
                 <p class="text-xs wrap-break-word text-muted-foreground">
                     Registró {{ movement.recorderName }}
+                    <template v-if="movement.shiftId">
+                        · Turno #{{ movement.shiftId }}</template
+                    >
                 </p>
             </div>
             <div class="flex flex-col items-end gap-2">
                 <p class="font-semibold whitespace-nowrap tabular-nums">
-                    {{ signs[movement.kind]
-                    }}{{ formatUsd(movement.amountCents) }}
+                    {{ movementAmount(movement) }}
                 </p>
                 <Badge
                     v-if="!movement.confirmed && !movement.returnedOn"
                     variant="secondary"
                 >
-                    {{
-                        movement.kind === 'deposit'
-                            ? 'En tránsito'
-                            : 'Pendiente'
-                    }}
+                    {{ movementStatus(movement) }}
                 </Badge>
                 <Button
-                    v-if="!movement.confirmed && !movement.returnedOn"
+                    v-if="
+                        canManage && !movement.confirmed && !movement.returnedOn
+                    "
                     as-child
                     variant="outline"
                     size="sm"
                     class="min-h-10"
                 >
                     <Link :href="edit(movement.id)">
-                        {{
-                            movement.kind === 'deposit'
-                                ? 'Gestionar depósito'
-                                : 'Confirmar'
-                        }}
+                        {{ movementAction(movement) }}
                     </Link>
                 </Button>
             </div>

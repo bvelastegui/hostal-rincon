@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $id
+ * @property int|null $cash_shift_id
  * @property string $occurred_on
  * @property CarbonImmutable|null $confirmed_at
  * @property CarbonImmutable|null $returned_at
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'request_id', 'request_fingerprint', 'kind', 'payment_method', 'amount_cents',
     'description', 'occurred_on', 'bank_id', 'bank_account_id', 'voucher',
-    'responsible_id', 'responsible_name', 'recorded_by', 'recorder_name',
+    'responsible_id', 'responsible_name', 'recorded_by', 'recorder_name', 'cash_shift_id',
 ])]
 class CashMovement extends Model
 {
