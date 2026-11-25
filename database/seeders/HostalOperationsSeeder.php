@@ -357,7 +357,7 @@ class HostalOperationsSeeder extends Seeder
             $needed = $amount - $this->cash();
 
             if ($needed > 0) {
-                $this->cashMovement($this->admin, $shift, $at, 'income', $needed, 'Cobros en efectivo antes de entregar un adelanto');
+                $this->cashMovement($this->admin, $shift, $at, 'income', $needed, 'Cobro de hospedaje en efectivo');
             }
         } elseif ($amount > $this->balances->bankAccountBalance($account)) {
             throw new LogicException('La cuenta de demostración no tiene saldo para el adelanto.');
