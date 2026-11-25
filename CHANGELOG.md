@@ -4,6 +4,13 @@ El proyecto usa versionamiento semántico (`MAJOR.MINOR.PATCH`). Incrementa `MAJ
 
 Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la fecha en formato `AAAA-MM-DD` y etiqueta el commit de la entrega con `vMAJOR.MINOR.PATCH`.
 
+## 0.6.0 (prevista)
+
+- La administradora puede consultar un **Reporte mensual** con cobros, gastos, depósitos y adelantos por empleado. Se distinguen los importes confirmados y pendientes, los depósitos devueltos y los saldos actuales de efectivo, tránsito y bancos. [HR-16](https://nexodigital.youtrack.cloud/issue/HR-16)
+- Los adelantos nuevos se registran en efectivo o por transferencia con cuenta de origen y voucher. La entrega genera un movimiento de adelanto con detalle para la administradora y se descuenta una sola vez del saldo correspondiente. El monto está limitado por el saldo disponible de esa fuente y el cupo del empleado.
+- Los operadores ven los adelantos como **Egreso** y los demás movimientos sensibles como **Ingreso**, **Egreso** o **Transacción**. Pueden consultar la fecha, el estado, la cuenta, el importe y quién registró el movimiento. La administradora puede marcar los movimientos al registrarlos o desde la lista.
+- El seeder de QA simula adelantos en efectivo y por transferencia, una cuenta de reserva con saldo limitado y movimientos sensibles y ordinarios en el turno activo.
+
 ## 0.5.0 (prevista)
 
 - **Cambiar de sesión** ofrece perfiles guardados de forma opcional en el navegador compartido. Cada perfil conserva solo el nombre y el correo, y pide la contraseña al entrar. [HR-8](https://nexodigital.youtrack.cloud/issue/HR-8)
