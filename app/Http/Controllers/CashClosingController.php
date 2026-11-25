@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\CalculateCashBalances;
 use App\Http\Requests\StoreCashClosingRequest;
 use App\Models\CashClosing;
+use App\Models\CashMovement;
 use App\Models\CashOpening;
 use App\Models\CashShift;
 use App\Models\User;
@@ -301,6 +302,7 @@ class CashClosingController extends Controller
                 'note' => $note,
                 'closed_by' => $user->id,
                 'closed_at' => $closedAt,
+                'last_movement_id' => CashMovement::query()->max('id') ?? 0,
             ]);
             $opening->markUsed();
 

@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
+import { ChevronDown, ChevronRight } from '@lucide/vue';
+import CashMovementCorrectionLink from '@/components/CashMovementCorrectionLink.vue';
 import CashMovementSensitivityButton from '@/components/CashMovementSensitivityButton.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import {
     movementAccountRole,
     movementAction,
     movementAmount,
+    movementAuditLines,
     movementLabels,
     movementMethod,
     movementStatusLabels,
@@ -101,6 +109,13 @@ withDefaults(
                     Responsable del efectivo: {{ movement.responsibleName }}
                 </p>
                 <p
+                    v-for="line in movementAuditLines(movement)"
+                    :key="line"
+                    class="text-xs wrap-break-word text-muted-foreground"
+                >
+                    {{ line }}
+                </p>
+                <p
                     v-if="movement.isSensitive"
                     class="text-xs text-muted-foreground"
                 >
@@ -131,11 +146,48 @@ withDefaults(
                         {{ movementAction(movement) }}
                     </Link>
                 </Button>
+                <CashMovementCorrectionLink
+                    v-if="!movement.redacted"
+                    :movement="movement"
+                />
                 <CashMovementSensitivityButton
                     v-if="!movement.redacted"
                     :movement="movement"
                 />
             </div>
+            <Collapsible
+                v-if="movement.children?.length"
+                v-slot="{ open }"
+                :default-open="movement.expandHistory"
+                class="col-span-full"
+            >
+                <CollapsibleTrigger as-child>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        class="min-h-10"
+                        :aria-label="
+                            'Historial de correcciones del movimiento #' +
+                            movement.id
+                        "
+                    >
+                        <component
+                            :is="open ? ChevronDown : ChevronRight"
+                            data-icon="inline-start"
+                            aria-hidden="true"
+                        />
+                        Historial de correcciones
+                    </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent class="border-s ps-3">
+                    <CashMovementList
+                        :movements="movement.children"
+                        :show-date="showDate"
+                        :can-manage="false"
+                    />
+                </CollapsibleContent>
+            </Collapsible>
         </li>
     </ul>
 </template>

@@ -1,9 +1,20 @@
 <script setup lang="ts">
 import { Form, Head, Link, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import CashMovementVoidReason from '@/components/CashMovementVoidReason.vue';
 import SelectField from '@/components/SelectField.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import {
     Field,
     FieldDescription,
@@ -15,13 +26,37 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { paymentOptions } from '@/lib/cash-movement';
 import { formatUsd } from '@/lib/money';
-import { index, returnToCash, store, update } from '@/routes/movements';
-import type { CashMovement, MovementKind } from '@/types/cash-movement';
+import {
+    annul,
+    index,
+    replace,
+    returnToCash,
+    store,
+    update,
+} from '@/routes/movements';
+import type {
+    CashMovement,
+    MovementKind,
+    PaymentMethod,
+} from '@/types/cash-movement';
 
 const props = defineProps<{
     kind: Exclude<MovementKind, 'advance'>;
     requestId: string | null;
     movement: CashMovement | null;
+    replacement?: {
+        id: number;
+        date: string;
+        description: string;
+        amount: string;
+        paymentMethod: PaymentMethod;
+        accountId: number | null;
+        originBankId: number | null;
+        voucher: string | null;
+        responsibleId: number | null;
+        confirmed: boolean;
+        isSensitive: boolean;
+    } | null;
     depositCashCents?: number | null;
     banks: { id: number; name: string }[];
     originBanks: { id: number; name: string }[];
@@ -33,7 +68,7 @@ defineOptions({
 });
 
 const page = usePage();
-const method = ref('cash');
+const method = ref<string>(props.replacement?.paymentMethod ?? 'cash');
 const isDeposit = computed(() => props.kind === 'deposit');
 const isExpense = computed(() => props.kind === 'expense');
 const isTransfer = computed(
@@ -42,15 +77,26 @@ const isTransfer = computed(
 const depositConfirmation = computed(
     () => isDeposit.value && props.movement !== null,
 );
+const confirmedDepositReplacement = computed(
+    () => isDeposit.value && props.replacement?.confirmed === true,
+);
 const selectAccount = computed(
     () =>
         depositConfirmation.value ||
+        confirmedDepositReplacement.value ||
         (props.movement === null && isTransfer.value),
 );
 const canConfirmOnSave = computed(
     () => !props.movement && props.kind === 'income' && isTransfer.value,
 );
+const preferConfirmation = computed(
+    () => canConfirmOnSave.value && props.replacement?.confirmed === true,
+);
 const title = computed(() => {
+    if (props.replacement) {
+        return 'Corregir movimiento';
+    }
+
     if (props.movement) {
         return isDeposit.value ? 'Gestionar depósito' : 'Confirmar cobro';
     }
@@ -66,14 +112,24 @@ const submitLabel = computed(() =>
         ? 'Confirmar depósito'
         : props.movement
           ? 'Confirmar cobro'
-          : 'Guardar',
+          : preferConfirmation.value
+            ? 'Reemplazar y confirmar'
+            : props.replacement
+              ? 'Anular y reemplazar'
+              : 'Guardar',
 );
-const action = computed(() =>
-    props.movement ? update.form(props.movement.id) : store.form(),
-);
-const back = computed(() =>
-    index({ query: props.movement ? { date: props.movement.date } : {} }),
-);
+const action = computed(() => {
+    if (props.replacement) {
+        return replace.form(props.replacement.id);
+    }
+
+    return props.movement ? update.form(props.movement.id) : store.form();
+});
+const back = computed(() => {
+    const date = props.replacement?.date ?? props.movement?.date;
+
+    return index({ query: date ? { date } : {} });
+});
 const originOptions = computed(() =>
     props.originBanks.map(({ id, name }) => ({
         value: String(id),
@@ -96,7 +152,15 @@ const userOptions = computed(() =>
         <Head :title="title" />
         <h1 class="text-2xl font-semibold tracking-tight">{{ title }}</h1>
 
-        <p v-if="isDeposit && !movement" class="text-sm text-muted-foreground">
+        <p v-if="replacement" class="text-sm text-muted-foreground">
+            Movimiento #{{ replacement.id }} · {{ replacement.description }} ·
+            {{ replacement.date }}. Al guardar, se anula el original y se
+            registra el reemplazo.
+        </p>
+        <p
+            v-else-if="isDeposit && !movement"
+            class="text-sm text-muted-foreground"
+        >
             Registra el retiro de efectivo. El monto quedará en tránsito hasta
             confirmar el depósito bancario.
         </p>
@@ -166,6 +230,7 @@ const userOptions = computed(() =>
                             id="description"
                             name="description"
                             class="min-h-11"
+                            :default-value="replacement?.description"
                             maxlength="255"
                             :aria-invalid="!!errors.description"
                             :aria-describedby="
@@ -188,6 +253,7 @@ const userOptions = computed(() =>
                             id="amount"
                             name="amount"
                             class="min-h-11"
+                            :default-value="replacement?.amount"
                             inputmode="decimal"
                             placeholder="0,00"
                             :aria-invalid="!!errors.amount"
@@ -205,7 +271,9 @@ const userOptions = computed(() =>
                             {{
                                 depositCashCents == null
                                     ? 'Configura el saldo inicial de efectivo para registrar un retiro.'
-                                    : 'Efectivo disponible en caja: ' +
+                                    : (replacement
+                                          ? 'Efectivo disponible para el reemplazo: '
+                                          : 'Efectivo disponible en caja: ') +
                                       formatUsd(Math.max(0, depositCashCents)) +
                                       '.'
                             }}
@@ -221,6 +289,7 @@ const userOptions = computed(() =>
                         label="Responsable del efectivo"
                         placeholder="Selecciona a la persona que recibe el efectivo"
                         :options="userOptions"
+                        :default-value="replacement?.responsibleId?.toString()"
                         :error="errors.responsible_id"
                     />
                     <SelectField
@@ -251,6 +320,7 @@ const userOptions = computed(() =>
                     label="Banco de origen"
                     placeholder="Selecciona el banco del huésped"
                     :options="originOptions"
+                    :default-value="replacement?.originBankId?.toString()"
                     :error="errors.origin_bank_id"
                 />
 
@@ -266,6 +336,7 @@ const userOptions = computed(() =>
                         id="movement-sensitive"
                         name="is_sensitive"
                         value="1"
+                        :default-value="replacement?.isSensitive"
                         :aria-invalid="!!errors.is_sensitive"
                         :aria-describedby="
                             errors.is_sensitive
@@ -298,6 +369,7 @@ const userOptions = computed(() =>
                     "
                     placeholder="Selecciona la cuenta bancaria"
                     :options="bankOptions"
+                    :default-value="replacement?.accountId?.toString()"
                     :error="errors.bank_account_id"
                 />
                 <p
@@ -309,7 +381,11 @@ const userOptions = computed(() =>
                 </p>
 
                 <Field
-                    v-if="isTransfer || depositConfirmation"
+                    v-if="
+                        isTransfer ||
+                        depositConfirmation ||
+                        confirmedDepositReplacement
+                    "
                     :data-invalid="!!errors.voucher"
                 >
                     <FieldLabel for="voucher">Número de voucher</FieldLabel>
@@ -318,8 +394,16 @@ const userOptions = computed(() =>
                         name="voucher"
                         class="min-h-11"
                         maxlength="100"
-                        :default-value="movement?.voucher ?? undefined"
-                        :required="!!movement || isExpense"
+                        :default-value="
+                            movement?.voucher ??
+                            replacement?.voucher ??
+                            undefined
+                        "
+                        :required="
+                            !!movement ||
+                            isExpense ||
+                            confirmedDepositReplacement
+                        "
                         :aria-invalid="!!errors.voucher"
                         :aria-describedby="
                             errors.voucher ? 'voucher-error' : undefined
@@ -337,6 +421,11 @@ const userOptions = computed(() =>
                     }}</FieldError>
                 </Field>
 
+                <CashMovementVoidReason
+                    v-if="replacement"
+                    id="replace-reason"
+                    :error="errors.void_reason"
+                />
                 <FieldError v-if="movement && errors.amount">{{
                     errors.amount
                 }}</FieldError>
@@ -351,7 +440,7 @@ const userOptions = computed(() =>
                     <Button
                         type="submit"
                         :name="canConfirmOnSave ? 'confirm' : undefined"
-                        value="0"
+                        :value="preferConfirmation ? '1' : '0'"
                         class="min-h-11 w-full sm:w-auto"
                         :disabled="
                             processing || (selectAccount && !banks.length)
@@ -363,12 +452,18 @@ const userOptions = computed(() =>
                         v-if="canConfirmOnSave"
                         type="submit"
                         name="confirm"
-                        value="1"
+                        :value="preferConfirmation ? '0' : '1'"
                         variant="secondary"
                         class="min-h-11 w-full sm:w-auto"
                         :disabled="processing || !banks.length"
                     >
-                        Guardar y confirmar
+                        {{
+                            preferConfirmation
+                                ? 'Reemplazar como pendiente'
+                                : replacement
+                                  ? 'Reemplazar y confirmar'
+                                  : 'Guardar y confirmar'
+                        }}
                     </Button>
                     <Button
                         as-child
@@ -380,6 +475,62 @@ const userOptions = computed(() =>
                 </div>
             </FieldGroup>
         </Form>
+        <Dialog v-if="replacement">
+            <DialogTrigger as-child>
+                <Button
+                    type="button"
+                    variant="outline"
+                    class="min-h-11 w-full sm:w-fit"
+                >
+                    Anular sin reemplazo
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle
+                        >Anular movimiento #{{ replacement.id }}</DialogTitle
+                    >
+                    <DialogDescription>
+                        El movimiento seguirá en el historial como anulado y su
+                        importe dejará de contar en el saldo.
+                    </DialogDescription>
+                </DialogHeader>
+                <Form
+                    v-bind="annul.form(replacement.id)"
+                    v-slot="{ errors, processing }"
+                    error-bag="annulMovement"
+                    class="flex flex-col gap-4"
+                >
+                    <FieldGroup>
+                        <CashMovementVoidReason
+                            id="annul-reason"
+                            :error="errors.void_reason"
+                        />
+                    </FieldGroup>
+                    <FieldError v-if="errors.movement">{{
+                        errors.movement
+                    }}</FieldError>
+                    <DialogFooter>
+                        <DialogClose as-child>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                class="min-h-11"
+                                >Cancelar</Button
+                            >
+                        </DialogClose>
+                        <Button
+                            type="submit"
+                            variant="destructive"
+                            class="min-h-11"
+                            :disabled="processing"
+                        >
+                            Anular movimiento
+                        </Button>
+                    </DialogFooter>
+                </Form>
+            </DialogContent>
+        </Dialog>
         <template v-if="movement && isDeposit">
             <Separator />
             <Form

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
+import { ChevronDown, ChevronRight } from '@lucide/vue';
 import { computed, h } from 'vue';
+import CashMovementCorrectionLink from '@/components/CashMovementCorrectionLink.vue';
 import CashMovementSensitivityButton from '@/components/CashMovementSensitivityButton.vue';
 import DataTable from '@/components/DataTable.vue';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +11,7 @@ import {
     movementAccountRole,
     movementAction,
     movementAmount,
+    movementAuditLines,
     movementLabels,
     movementMethod,
     movementStatusLabels,
@@ -44,6 +47,41 @@ function details(text: string, ...lines: string[]) {
 const columns = computed<DataTableColumn<MovementRow>[]>(() => {
     const visible: DataTableColumn<MovementRow>[] = [];
 
+    if (props.movements.some((movement) => movement.children?.length)) {
+        visible.push({
+            id: 'expand',
+            header: () => h('span', { class: 'sr-only' }, 'Historial'),
+            size: 48,
+            cell: ({ row }) =>
+                row.getCanExpand()
+                    ? h(
+                          Button,
+                          {
+                              type: 'button',
+                              variant: 'ghost',
+                              size: 'icon-sm',
+                              'aria-label':
+                                  'Historial de correcciones del movimiento #' +
+                                  row.original.id,
+                              'aria-expanded': row.getIsExpanded(),
+                              onClick: row.getToggleExpandedHandler(),
+                          },
+                          {
+                              default: () =>
+                                  h(
+                                      row.getIsExpanded()
+                                          ? ChevronDown
+                                          : ChevronRight,
+                                      {
+                                          'aria-hidden': 'true',
+                                      },
+                                  ),
+                          },
+                      )
+                    : null,
+        });
+    }
+
     if (props.showDate) {
         visible.push({
             id: 'date',
@@ -67,6 +105,7 @@ const columns = computed<DataTableColumn<MovementRow>[]>(() => {
                                     ' · ' +
                                     movementMethod(movement),
                           movement.isSensitive ? 'Movimiento sensible' : '',
+                          ...movementAuditLines(movement),
                       ),
         },
         {
@@ -153,11 +192,17 @@ const columns = computed<DataTableColumn<MovementRow>[]>(() => {
     const canMarkSensitivity =
         page.props.auth.canManageMovementSensitivity &&
         props.movements.some(
-            (movement) => !movement.redacted && movement.kind !== 'advance',
+            (movement) =>
+                !movement.redacted &&
+                movement.kind !== 'advance' &&
+                movement.status !== 'voided',
         );
 
     if (
         canMarkSensitivity ||
+        props.movements.some(
+            (movement) => !movement.redacted && movement.canCorrect,
+        ) ||
         (props.canManage && props.movements.some(movementAction))
     ) {
         visible.push({
@@ -186,6 +231,7 @@ const columns = computed<DataTableColumn<MovementRow>[]>(() => {
                               },
                           )
                         : null,
+                    h(CashMovementCorrectionLink, { movement }),
                     h(CashMovementSensitivityButton, { movement }),
                 ]);
             },
@@ -197,5 +243,11 @@ const columns = computed<DataTableColumn<MovementRow>[]>(() => {
 </script>
 
 <template>
-    <DataTable :caption="caption" :rows="movements" :columns="columns" />
+    <DataTable
+        :caption="caption"
+        :rows="movements"
+        :columns="columns"
+        :get-sub-rows="(movement) => movement.children"
+        :is-initially-expanded="(movement) => movement.expandHistory === true"
+    />
 </template>

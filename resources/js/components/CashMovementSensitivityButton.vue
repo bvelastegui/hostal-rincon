@@ -23,7 +23,8 @@ const label = computed(() =>
     <Tooltip
         v-if="
             page.props.auth.canManageMovementSensitivity &&
-            movement.kind !== 'advance'
+            movement.kind !== 'advance' &&
+            movement.status !== 'voided'
         "
     >
         <TooltipTrigger as-child>

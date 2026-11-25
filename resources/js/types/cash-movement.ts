@@ -3,6 +3,7 @@ export type ReservedMovementKind = 'income' | 'expense' | 'transaction';
 export type PaymentMethod = 'cash' | 'transfer';
 
 export type MovementStatus =
+    | 'voided'
     | 'returned'
     | 'confirmed'
     | 'in_transit'
@@ -28,9 +29,15 @@ export type CashMovement = {
     confirmedOn: string | null;
     confirmed: boolean;
     returnedOn: string | null;
+    canCorrect: boolean;
+    replacesId?: number | null;
+    replacementId?: number | null;
+    voidedBy?: string | null;
+    voidedOn?: string | null;
+    voidReason?: string | null;
 };
 
-export type MovementRow =
+export type MovementRow = (
     | CashMovement
     | {
           id: number;
@@ -41,7 +48,11 @@ export type MovementRow =
           date: string;
           status: MovementStatus;
           account: string | null;
-      };
+      }
+) & {
+    children?: MovementRow[];
+    expandHistory?: boolean;
+};
 
 export type CashBalances = {
     cash: number | null;

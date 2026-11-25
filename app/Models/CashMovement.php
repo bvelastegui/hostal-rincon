@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * @property int $id
@@ -19,11 +20,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $occurred_on
  * @property CarbonImmutable|null $confirmed_at
  * @property CarbonImmutable|null $returned_at
+ * @property CarbonImmutable|null $voided_at
+ * @property int|null $replaces_movement_id
  */
 #[Fillable([
     'request_id', 'request_fingerprint', 'kind', 'payment_method', 'amount_cents',
     'description', 'occurred_on', 'is_sensitive', 'bank_id', 'bank_account_id', 'voucher',
-    'responsible_id', 'responsible_name', 'recorded_by', 'recorder_name', 'cash_shift_id',
+    'responsible_id', 'responsible_name', 'recorded_by', 'recorder_name', 'cash_shift_id', 'replaces_movement_id',
 ])]
 class CashMovement extends Model
 {
@@ -46,6 +49,12 @@ class CashMovement extends Model
         return $this->belongsTo(BankAccount::class);
     }
 
+    /** @return HasOne<CashMovement, $this> */
+    public function replacement(): HasOne
+    {
+        return $this->hasOne(self::class, 'replaces_movement_id');
+    }
+
     public function isSensitive(): bool
     {
         return $this->kind === 'advance' || $this->is_sensitive;
@@ -63,18 +72,20 @@ class CashMovement extends Model
     public function scopeWithStatus(Builder $query, ?string $status): Builder
     {
         return match ($status) {
-            'confirmed' => $query->whereNotNull('confirmed_at')->whereNull('returned_at'),
+            'voided' => $query->whereNotNull('voided_at'),
+            'confirmed' => $query->whereNotNull('confirmed_at')->whereNull('returned_at')->whereNull('voided_at'),
             'returned' => $query->whereNotNull('returned_at'),
-            'pending' => $query->where('kind', '!=', 'deposit')->whereNull('confirmed_at')->whereNull('returned_at'),
-            'in_transit' => $query->where('kind', 'deposit')->whereNull('confirmed_at')->whereNull('returned_at'),
+            'pending' => $query->where('kind', '!=', 'deposit')->whereNull('confirmed_at')->whereNull('returned_at')->whereNull('voided_at'),
+            'in_transit' => $query->where('kind', 'deposit')->whereNull('confirmed_at')->whereNull('returned_at')->whereNull('voided_at'),
             default => $query,
         };
     }
 
-    /** @return 'returned'|'confirmed'|'in_transit'|'pending' */
+    /** @return 'voided'|'returned'|'confirmed'|'in_transit'|'pending' */
     public function status(): string
     {
         return match (true) {
+            $this->voided_at !== null => 'voided',
             $this->returned_at !== null => 'returned',
             $this->confirmed_at !== null => 'confirmed',
             $this->kind === 'deposit' => 'in_transit',
@@ -91,6 +102,8 @@ class CashMovement extends Model
             'bank_account_id' => 'integer',
             'confirmed_at' => 'immutable_datetime',
             'returned_at' => 'immutable_datetime',
+            'voided_at' => 'immutable_datetime',
+            'replaces_movement_id' => 'integer',
         ];
     }
 }

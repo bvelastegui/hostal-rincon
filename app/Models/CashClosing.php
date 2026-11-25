@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $difference_cents
  * @property int $cash_adjustment_cents
  * @property int|null $cash_shift_id
+ * @property int|null $last_movement_id
  * @property int $closed_by
  * @property string|null $note
  * @property CarbonImmutable $closed_at
@@ -26,7 +27,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 #[Fillable([
     'request_id', 'type', 'closed_on', 'expected_cash_cents', 'counted_cash_cents',
-    'difference_cents', 'note', 'closed_by', 'closed_at', 'cash_shift_id', 'cash_adjustment_cents',
+    'difference_cents', 'note', 'closed_by', 'closed_at', 'cash_shift_id', 'cash_adjustment_cents', 'last_movement_id',
     'shortage_resolved_at', 'shortage_resolved_by', 'shortage_resolution_method', 'shortage_resolution_note',
 ])]
 class CashClosing extends Model
@@ -69,6 +70,7 @@ class CashClosing extends Model
             'counted_cash_cents' => 'integer',
             'difference_cents' => 'integer',
             'cash_adjustment_cents' => 'integer',
+            'last_movement_id' => 'integer',
             'closed_at' => 'immutable_datetime',
             'shortage_resolved_at' => 'immutable_datetime',
         ];

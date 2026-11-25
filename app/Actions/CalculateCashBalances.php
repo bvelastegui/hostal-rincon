@@ -89,7 +89,7 @@ final class CalculateCashBalances
      */
     private function movementTotals(Builder $query): Builder
     {
-        return $query->whereNull('returned_at')
+        return $query->whereNull('returned_at')->whereNull('voided_at')
             ->where(fn ($query) => $query->where('kind', '!=', 'advance')
                 ->orWhere('payment_method', 'transfer')->orWhereNotNull('cash_opening_id'))
             ->selectRaw('kind, payment_method,
