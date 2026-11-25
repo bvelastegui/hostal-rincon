@@ -274,6 +274,14 @@ test('un adelanto actualiza una sola fuente y se muestra con importe reservado e
         ->where('history.data.0.cash_movement.bank_account.name', $account->name));
 
     $this->post(route('advances.deduct', $employee), ['latest_pending_id' => $bankAdvance->id])->assertSessionHasNoErrors();
+    $this->get(route('reports.monthly'))->assertInertia(fn (Assert $page) => $page
+        ->where('balances.cash', 7500)
+        ->where('balances.accounts.0.balanceCents', 15000)
+        ->where('advances.0.issuedCashCents', 2500)
+        ->where('advances.0.issuedTransferCents', 5000)
+        ->where('advances.0.deductedCents', 7500)
+        ->where('advances.0.pendingCents', 0)
+        ->has('movements', 0));
     $this->assertDatabaseCount('cash_movements', 2);
 
     $this->patch(route('movements.update-sensitivity', $bankAdvance->cash_movement_id), ['is_sensitive' => false])->assertNotFound();

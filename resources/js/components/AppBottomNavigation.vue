@@ -51,7 +51,9 @@ const items = computed(() => [
                             aria-hidden="true"
                             data-icon="inline-start"
                         />
-                        {{ item.title }}
+                        <span class="max-w-full truncate">{{
+                            item.title
+                        }}</span>
                     </Link>
                 </Button>
             </li>

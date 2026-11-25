@@ -32,6 +32,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('manage-deposits', fn (User $user): bool => $user->is_admin);
         Gate::define('manage-movement-sensitivity', fn (User $user): bool => $user->is_admin);
         Gate::define('manage-cash-closings', fn (User $user): bool => $user->is_admin);
+        Gate::define('view-monthly-report', fn (User $user): bool => $user->is_admin);
     }
 
     /**
