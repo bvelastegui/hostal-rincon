@@ -37,7 +37,7 @@ const menuDividerClass = 'border-l border-primary-foreground/25 pl-4';
 
 const menuItemClass = cn(
     navigationMenuTriggerStyle(),
-    'h-14 cursor-pointer flex-col gap-1 bg-transparent px-2 py-1.5 text-xs text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground focus:bg-primary-foreground/15 focus:text-primary-foreground focus-visible:ring-primary-foreground/60 aria-[current=location]:bg-primary-foreground aria-[current=location]:text-primary xl:px-3',
+    'h-16 w-24 shrink-0 cursor-pointer flex-col gap-1 bg-transparent px-1 py-1 text-center text-xs leading-none whitespace-normal text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground focus:bg-primary-foreground/15 focus:text-primary-foreground focus-visible:ring-primary-foreground/60 aria-[current=location]:bg-primary-foreground aria-[current=location]:text-primary xl:w-28 xl:px-2 [&>svg]:size-6 [&>svg]:shrink-0',
 );
 </script>
 
@@ -73,7 +73,6 @@ const menuItemClass = cn(
                             <component
                                 v-if="item.icon"
                                 :is="item.icon"
-                                class="size-6 shrink-0"
                                 aria-hidden="true"
                             />
                             {{ item.title }}
@@ -95,10 +94,7 @@ const menuItemClass = cn(
                                 settingsActive ? 'location' : undefined
                             "
                         >
-                            <Settings
-                                class="size-6 shrink-0"
-                                aria-hidden="true"
-                            />
+                            <Settings aria-hidden="true" />
                             Ajustes
                         </Link>
                     </NavigationMenuItem>
@@ -107,10 +103,7 @@ const menuItemClass = cn(
                             :class="menuItemClass"
                             data-test="logout-button"
                         >
-                            <LogOut
-                                class="size-6 shrink-0"
-                                aria-hidden="true"
-                            />
+                            <LogOut aria-hidden="true" />
                             Cambiar de sesión
                         </LogoutLink>
                     </NavigationMenuItem>

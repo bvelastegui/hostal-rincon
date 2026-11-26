@@ -37,7 +37,7 @@ fi
 
 if [[ "$revision" == '--workspace' ]]; then
     git -C .. ls-files -z --cached --others --exclude-standard -- . ':(exclude)desktop' |
-        rsync -a --from0 --files-from=- ../ "$staging/web/"
+        rsync -a --ignore-missing-args --from0 --files-from=- ../ "$staging/web/"
 else
     git -C .. archive "$revision" | tar --exclude=desktop -x -C "$staging/web"
 fi
@@ -47,14 +47,21 @@ fi
     npm ci --no-audit --no-fund
     VITE_APP_NAME='Hostal Rincón' npm run build
 )
-rsvg-convert --width 256 --height 256 "$staging/web/public/favicon.svg" > "$staging/hostal-rincon.png"
+if [[ -f "$staging/web/public/favicon.png" ]]; then
+    cp "$staging/web/public/favicon.png" "$staging/hostal-rincon.png"
+    cp "$staging/web/public/favicon.ico" "$staging/hostal-rincon.ico"
+else
+    rsvg-convert --width 256 --height 256 "$staging/web/public/favicon.svg" > "$staging/hostal-rincon.png"
+    if [[ "$platform" == 'windows' ]]; then
+        magick "$staging/hostal-rincon.png" -define icon:auto-resize=256,128,64,48,32,16 "$staging/hostal-rincon.ico"
+    fi
+fi
 rsync -a --delete --exclude=node_modules "$staging/web/" runtime/web/
 
 if [[ "$platform" == 'linux' ]]; then
     rsync -a --delete "$staging/php/" runtime/php-linux/
     cp "$staging/hostal-rincon.png" runtime/
 else
-    magick "$staging/hostal-rincon.png" -define icon:auto-resize=256,128,64,48,32,16 "$staging/hostal-rincon.ico"
     rsync -a --delete "$staging/php/" runtime/php/
     cp "$staging/vc_redist.x64.exe" "$staging/hostal-rincon.ico" runtime/
 fi

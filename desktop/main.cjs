@@ -1,4 +1,11 @@
-const { app, BrowserWindow, dialog, Menu, session } = require('electron');
+const {
+    app,
+    BrowserWindow,
+    dialog,
+    Menu,
+    nativeTheme,
+    session,
+} = require('electron');
 const { execFile, spawn } = require('node:child_process');
 const { createHash, randomBytes, randomUUID } = require('node:crypto');
 const fs = require('node:fs');
@@ -159,6 +166,7 @@ function configureCache(storage, options) {
 }
 
 async function start() {
+    nativeTheme.themeSource = 'light';
     if (hasFrankenphp) await showSplash();
     const data = app.getPath('userData');
     const storage = path.join(data, 'storage');
