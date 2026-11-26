@@ -6,11 +6,14 @@ use App\Http\Controllers\CashMovementController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InitialSetupController;
 use App\Http\Controllers\MonthlyReportController;
+use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [InitialSetupController::class, 'home'])->name('home');
 Route::get('configuracion-inicial', [InitialSetupController::class, 'create'])->name('initial-setup.create');
-Route::post('configuracion-inicial', [InitialSetupController::class, 'store'])->name('initial-setup.store');
+Route::post('configuracion-inicial', [InitialSetupController::class, 'store'])
+    ->middleware(HandlePrecognitiveRequests::class)->name('initial-setup.store');
+Route::post('configuracion-inicial/restaurar', [InitialSetupController::class, 'restore'])->name('initial-setup.restore');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');

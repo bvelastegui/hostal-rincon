@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\ConvertUsdToCents;
 use App\Actions\CreateBankAccount;
+use App\Actions\RestoreLocalBackup;
 use App\Http\Requests\InitialSetupRequest;
 use App\Models\Bank;
 use App\Models\BankAccount;
@@ -17,7 +18,6 @@ use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -35,7 +35,7 @@ class InitialSetupController extends Controller implements HasMiddleware
 
                     return $next($request);
                 },
-                only: ['create', 'store'],
+                only: ['create', 'store', 'restore'],
             ),
         ];
     }
@@ -51,9 +51,7 @@ class InitialSetupController extends Controller implements HasMiddleware
 
     public function create(): Response
     {
-        return Inertia::render('auth/InitialSetup', [
-            'passwordRules' => Password::defaults()->toPasswordRulesString(),
-        ]);
+        return Inertia::render('auth/InitialSetup');
     }
 
     public function store(InitialSetupRequest $request, CreateBankAccount $createAccount): RedirectResponse
@@ -99,6 +97,22 @@ class InitialSetupController extends Controller implements HasMiddleware
         $request->session()->regenerate();
 
         return to_route('dashboard');
+    }
+
+    public function restore(Request $request, RestoreLocalBackup $restore): RedirectResponse
+    {
+        $request->validate(['backup' => ['required', 'file', 'extensions:zip', 'max:65536']], [], [
+            'backup' => 'respaldo',
+        ]);
+
+        $restore->handle($request->file('backup'));
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => 'Respaldo restaurado. Ingresa con tu usuario y contraseña.',
+        ]);
+
+        return to_route('login');
     }
 
     private static function available(): bool

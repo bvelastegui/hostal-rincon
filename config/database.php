@@ -38,8 +38,8 @@ return [
             'database' => env('DB_DATABASE', database_path('database.sqlite')),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
-            'busy_timeout' => null,
-            'journal_mode' => null,
+            'busy_timeout' => env('DB_BUSY_TIMEOUT', env('HOSTAL_DESKTOP_SETUP', false) ? 5000 : null),
+            'journal_mode' => env('DB_JOURNAL_MODE', env('HOSTAL_DESKTOP_SETUP', false) ? 'WAL' : null),
             'synchronous' => null,
             // SQLite needs an immediate transaction to serialize advance balance changes.
             'transaction_mode' => 'IMMEDIATE',

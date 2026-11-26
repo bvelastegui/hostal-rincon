@@ -53,6 +53,7 @@ class HandleInertiaRequests extends Middleware
                 'loginField' => Fortify::username(),
                 'canManageAdvances' => Gate::allows('manage-advances'),
                 'canManageCashSettings' => Gate::allows('manage-cash-settings'),
+                'canManageLocalBackups' => Gate::allows('manage-local-backups'),
                 'canViewMonthlyReport' => Gate::allows('view-monthly-report'),
                 'canManageMovementSensitivity' => Gate::allows('manage-movement-sensitivity'),
                 'cashShiftAccess' => $request->attributes->get('cashShiftAccess'),
