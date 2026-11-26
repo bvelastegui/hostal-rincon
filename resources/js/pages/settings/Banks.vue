@@ -19,6 +19,11 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { formatUsd } from '@/lib/money';
+import {
+    confirmRecord,
+    fieldValue,
+    reviewSubmission,
+} from '@/lib/record-confirmation';
 import { edit } from '@/routes/bank-settings';
 import { create, edit as editAccount } from '@/routes/bank-settings/accounts';
 
@@ -127,9 +132,18 @@ defineOptions({
         >
             <div class="flex flex-col gap-4">
                 <Form
+                    novalidate
                     v-bind="storeBank.form()"
                     v-slot="{ errors, processing }"
                     error-bag="createBank"
+                    @submit.capture="
+                        reviewSubmission($event, (data) => ({
+                            title: 'Confirmar registro del banco',
+                            description:
+                                'El banco quedará habilitado para seleccionarlo al registrar transferencias.',
+                            details: [fieldValue(data, 'name')],
+                        }))
+                    "
                     reset-on-success
                 >
                     <FieldGroup
@@ -165,6 +179,7 @@ defineOptions({
                 <ul v-if="banks.length" class="w-full divide-y">
                     <li v-for="bank in banks" :key="bank.id">
                         <Form
+                            novalidate
                             v-bind="updateBankStatus.form(bank.id)"
                             v-slot="{ errors, processing, submit }"
                             :error-bag="`bankStatus-${bank.id}`"
@@ -201,7 +216,23 @@ defineOptions({
                                             : undefined
                                     "
                                     class="relative mr-1 before:absolute before:-inset-3.5"
-                                    @update:model-value="submit()"
+                                    @update:model-value="
+                                        confirmRecord(
+                                            {
+                                                title: bank.active
+                                                    ? 'Desactivar banco'
+                                                    : 'Activar banco',
+                                                description: bank.active
+                                                    ? 'El banco dejará de estar habilitado para nuevas operaciones.'
+                                                    : 'El banco volverá a estar habilitado para nuevas operaciones.',
+                                                details: [bank.name],
+                                                confirmLabel: bank.active
+                                                    ? 'Desactivar banco'
+                                                    : 'Activar banco',
+                                            },
+                                            () => submit(),
+                                        )
+                                    "
                                 />
                             </div>
                             <FieldError

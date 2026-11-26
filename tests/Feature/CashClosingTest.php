@@ -248,10 +248,25 @@ test('entregar la caja devuelve a quien inicia sesión a la recepción del turno
         ->assertRedirect($target);
     $this->assertAuthenticatedAs($incoming);
     $this->get($target)->assertInertia(fn (Assert $page) => $page
-        ->where('startReceiving', true)
+        ->where('initialAction', 'receive')
         ->where('canReceive', true)
         ->where('activeShift.responsible', $outgoing->name));
 });
+
+test('el acceso al cierre independiente solo abre el formulario para la administradora', function (bool $isAdmin, ?string $initialAction) {
+    CashOpening::query()->update(['opening_balance_cents' => 10000]);
+    $this->withoutVite()->actingAs(User::factory()->create(['is_admin' => $isAdmin]));
+
+    $response = $this->get(route('cash-closings.index', ['accion' => 'cierre-independiente']));
+
+    $response->assertInertia(fn (Assert $page) => $page->component('CashClosings')
+        ->where('initialAction', $initialAction)
+        ->where('expectedCashCents', 10000));
+    $this->assertDatabaseCount('cash_closings', 0);
+})->with([
+    'administradora' => [true, 'close'],
+    'operador' => [false, null],
+]);
 
 test('la administradora puede cortar la caja aunque no haya turno abierto', function () {
     $this->actingAs(User::factory()->create(['is_admin' => true]));

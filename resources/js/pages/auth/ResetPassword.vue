@@ -6,6 +6,7 @@ import PasswordInput from '@/components/PasswordInput.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { reviewSubmission } from '@/lib/record-confirmation';
 import { Spinner } from '@/components/ui/spinner';
 import { update } from '@/routes/password';
 
@@ -29,7 +30,15 @@ const inputEmail = ref(props.email);
     <Head title="Restablecer contraseña" />
 
     <Form
+        novalidate
         v-bind="update.form()"
+        @submit.capture="
+            reviewSubmission($event, {
+                title: 'Confirmar nueva contraseña',
+                description:
+                    'Usarás la nueva contraseña la próxima vez que inicies sesión.',
+            })
+        "
         autocomplete="off"
         :transform="(data) => ({ ...data, token, email })"
         :reset-on-success="['password', 'password_confirmation']"

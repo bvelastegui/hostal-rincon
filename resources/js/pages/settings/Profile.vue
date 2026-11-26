@@ -10,6 +10,7 @@ import LogoutLink from '@/components/LogoutLink.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { reviewSubmission } from '@/lib/record-confirmation';
 import { Separator } from '@/components/ui/separator';
 import { edit } from '@/routes/profile';
 
@@ -45,7 +46,15 @@ const user = computed(() => page.props.auth.user);
         />
 
         <Form
+            novalidate
             v-bind="ProfileController.update.form()"
+            @submit.capture="
+                reviewSubmission($event, {
+                    title: 'Confirmar cambios de perfil',
+                    description:
+                        'Se actualizarán tus datos de perfil y de acceso.',
+                })
+            "
             class="grid gap-6"
             v-slot="{ errors, processing }"
         >

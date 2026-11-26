@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { X } from '@lucide/vue';
+import { Check, Plus, TriangleAlert, X } from '@lucide/vue';
 import { computed, h, ref } from 'vue';
 import {
+    correction,
     create,
     index,
     deduct,
@@ -14,9 +15,17 @@ import DataTableFilter from '@/components/DataTableFilter.vue';
 import DataTableMonth from '@/components/DataTableMonth.vue';
 import DataTablePagination from '@/components/DataTablePagination.vue';
 import InputError from '@/components/InputError.vue';
+import RecordAmounts from '@/components/RecordAmounts.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Card,
+    CardContent,
+    CardFooter,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import {
     Dialog,
     DialogClose,
@@ -28,12 +37,14 @@ import {
 } from '@/components/ui/dialog';
 import { paymentOptions } from '@/lib/cash-movement';
 import { formatUsd } from '@/lib/money';
+import { reviewAmount } from '@/lib/record-confirmation';
 import type { DataTableColumn, DataTablePage } from '@/types/data-table';
 
 type Employee = {
     id: number;
     name: string;
     pendingCents: number;
+    limitCents: number;
     latestPendingId: number | null;
 };
 
@@ -45,9 +56,15 @@ type Advance = {
     responsible: string;
     note: string | null;
     recorder_name: string;
+    canCorrect: boolean;
     cash_movement: {
         payment_method: 'cash' | 'transfer';
         voucher: string | null;
+        voided_voucher: string | null;
+        voided_at: string | null;
+        void_reason: string | null;
+        voided_by_name: string | null;
+        replaces_movement_id: number | null;
         bank_account: { name: string; bank: { name: string } } | null;
     } | null;
     deducted_at: string | null;
@@ -63,7 +80,6 @@ const props = defineProps<{
         month?: string;
         payment_method?: string;
     };
-    limitCents: number;
 }>();
 
 defineOptions({
@@ -75,7 +91,7 @@ const date = new Intl.DateTimeFormat('es-EC', {
     timeZone: 'America/Guayaquil',
 });
 const available = (employee: Employee) =>
-    Math.max(0, props.limitCents - employee.pendingCents);
+    Math.max(0, employee.limitCents - employee.pendingCents);
 const all = 'all';
 const filter = useForm({
     employee: String(props.filters.employee ?? all),
@@ -105,6 +121,7 @@ const filterFields = computed(() => [
             { value: all, label: 'Todos los estados' },
             { value: 'pending', label: 'Pendiente' },
             { value: 'deducted', label: 'Descontado' },
+            { value: 'voided', label: 'Anulado' },
         ],
     },
     {
@@ -137,24 +154,28 @@ const historyRows = computed(() =>
     props.history.data.map((advance) => {
         const movement = advance.cash_movement;
         const account = movement?.bank_account;
+        const voucher = movement?.voucher ?? movement?.voided_voucher;
 
         return {
             id: advance.id,
+            canCorrect: advance.canCorrect,
             employee: advance.employee_name,
             date: advance.issued_on.slice(0, 10).split('-').reverse().join('/'),
             amount: formatUsd(advance.amount_cents),
-            status: advance.deducted_at
-                ? { variant: 'success' as const, label: 'Descontado' }
-                : {
-                      variant: 'warning' as const,
-                      label: 'Pendiente de descuento',
-                  },
+            status: movement?.voided_at
+                ? { variant: 'destructive' as const, label: 'Anulado' }
+                : advance.deducted_at
+                  ? { variant: 'success' as const, label: 'Descontado' }
+                  : {
+                        variant: 'warning' as const,
+                        label: 'Pendiente de descuento',
+                    },
             payment: [
                 movement?.payment_method === 'transfer'
                     ? 'Transferencia bancaria'
                     : 'Efectivo',
                 ...(account ? [account.bank.name + ' · ' + account.name] : []),
-                ...(movement?.voucher ? ['Voucher ' + movement.voucher] : []),
+                ...(voucher ? ['Voucher ' + voucher] : []),
             ],
             record: [
                 'Registró ' + advance.recorder_name,
@@ -167,6 +188,18 @@ const historyRows = computed(() =>
                                   ? ' · ' + advance.deductor_name
                                   : ''),
                       ]
+                    : []),
+                ...(movement?.voided_at
+                    ? [
+                          'Anuló ' +
+                              (movement.voided_by_name ?? 'Administración'),
+                          ...(movement.void_reason
+                              ? [movement.void_reason]
+                              : []),
+                      ]
+                    : []),
+                ...(movement?.replaces_movement_id
+                    ? ['Reemplazo por corrección']
                     : []),
                 ...(advance.note ? [advance.note] : []),
             ],
@@ -229,6 +262,23 @@ const historyColumns: DataTableColumn<HistoryRow>[] = [
         accessorKey: 'amount',
         meta: { align: 'right' },
     },
+    {
+        id: 'actions',
+        header: 'Acciones',
+        cell: ({ row: { original } }) =>
+            original.canCorrect
+                ? h(
+                      Button,
+                      { variant: 'outline', size: 'sm', asChild: true },
+                      () =>
+                          h(
+                              Link,
+                              { href: correction(original.id) },
+                              () => 'Corregir',
+                          ),
+                  )
+                : null,
+    },
 ];
 
 const selectedEmployee = ref<Employee>();
@@ -264,8 +314,7 @@ function confirmDeduction(): void {
             <div class="space-y-1">
                 <h1 class="text-2xl font-semibold tracking-tight">Adelantos</h1>
                 <p class="text-sm text-muted-foreground">
-                    Consulta y registra adelantos de sueldo. Límite de
-                    {{ formatUsd(limitCents) }} pendientes por empleado.
+                    Consulta el límite y el saldo pendiente de cada empleado.
                 </p>
             </div>
             <Button as-child class="min-h-11 w-full sm:w-auto">
@@ -275,84 +324,140 @@ function confirmDeduction(): void {
 
         <section
             aria-label="Saldos por empleado"
-            class="grid gap-3 sm:grid-cols-2"
+            class="grid gap-4 lg:grid-cols-2"
         >
             <Card
                 v-for="employee in employees"
                 :key="employee.id"
-                class="min-w-0 gap-4"
+                class="min-w-0 gap-0 overflow-hidden py-0 font-sans"
             >
-                <CardHeader>
-                    <div class="flex items-start justify-between gap-3">
-                        <CardTitle class="break-words">{{
-                            employee.name
-                        }}</CardTitle>
-                        <Button
-                            as-child
-                            variant="ghost"
-                            size="sm"
-                            class="min-h-10 shrink-0"
+                <CardHeader
+                    class="flex items-center justify-between gap-3 px-4 py-3"
+                >
+                    <div
+                        class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5"
+                    >
+                        <CardTitle class="leading-tight wrap-anywhere">
+                            {{ employee.name }}
+                        </CardTitle>
+                        <Alert
+                            v-if="!available(employee)"
+                            variant="warning"
+                            class="inline-flex w-fit shrink-0 items-center gap-1 rounded-full px-2 py-0.5 [&>svg]:size-3.5 [&>svg]:translate-y-0"
                         >
-                            <Link :href="editEmployee(employee.id)"
-                                >Editar</Link
+                            <TriangleAlert aria-hidden="true" />
+                            <AlertDescription
+                                class="text-xs font-medium text-current"
                             >
-                        </Button>
+                                <template v-if="employee.limitCents === 0">
+                                    Adelantos deshabilitados
+                                    <span class="sr-only"
+                                        >. Edita el límite para
+                                        habilitarlos.</span
+                                    >
+                                </template>
+                                <template v-else>
+                                    Sin cupo
+                                    <span class="sr-only"
+                                        >. Registra el descuento completo o
+                                        aumenta el límite.</span
+                                    >
+                                </template>
+                            </AlertDescription>
+                        </Alert>
                     </div>
+                    <Button
+                        as-child
+                        variant="ghost"
+                        size="sm"
+                        class="min-h-10 shrink-0 text-primary"
+                    >
+                        <Link :href="editEmployee(employee.id)">Editar</Link>
+                    </Button>
                 </CardHeader>
-                <CardContent class="space-y-4">
-                    <dl class="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                            <dt class="text-muted-foreground">
+                <CardContent class="border-y px-0">
+                    <dl class="grid grid-cols-3 divide-x">
+                        <div
+                            class="row-span-2 grid grid-rows-subgrid gap-1 px-2.5 py-3 sm:px-4"
+                        >
+                            <dt
+                                class="text-xs leading-snug text-muted-foreground"
+                            >
+                                Límite
+                            </dt>
+                            <dd
+                                class="text-xl font-semibold tracking-tight wrap-anywhere tabular-nums sm:text-2xl"
+                            >
+                                {{ formatUsd(employee.limitCents) }}
+                            </dd>
+                        </div>
+                        <div
+                            class="row-span-2 grid grid-rows-subgrid gap-1 px-2.5 py-3 sm:px-4"
+                        >
+                            <dt
+                                class="text-xs leading-snug"
+                                :class="
+                                    employee.pendingCents
+                                        ? 'font-medium text-warning-foreground'
+                                        : 'text-muted-foreground'
+                                "
+                            >
                                 Pendiente de descuento
                             </dt>
                             <dd
-                                class="text-lg font-semibold tabular-nums"
+                                class="text-xl font-semibold tracking-tight wrap-anywhere tabular-nums sm:text-2xl"
                                 :class="{
                                     'text-warning-foreground':
-                                        employee.pendingCents,
+                                        employee.pendingCents > 0,
                                 }"
                             >
                                 {{ formatUsd(employee.pendingCents) }}
                             </dd>
-                            <Badge
-                                v-if="employee.pendingCents"
-                                variant="warning"
-                                class="mt-1"
-                            >
-                                Pendiente de descuento
-                            </Badge>
                         </div>
-                        <div>
-                            <dt class="text-muted-foreground">Disponible</dt>
-                            <dd class="text-lg font-semibold tabular-nums">
+                        <div
+                            class="row-span-2 grid grid-rows-subgrid gap-1 px-2.5 py-3 sm:px-4"
+                        >
+                            <dt
+                                class="text-xs leading-snug text-muted-foreground"
+                            >
+                                Disponible
+                            </dt>
+                            <dd
+                                class="text-xl font-semibold tracking-tight wrap-anywhere tabular-nums sm:text-2xl"
+                            >
                                 {{ formatUsd(available(employee)) }}
                             </dd>
                         </div>
                     </dl>
-                    <p v-if="!available(employee)" class="text-sm font-medium">
-                        Límite alcanzado. Registra el descuento completo para
-                        habilitar nuevos adelantos.
-                    </p>
-                    <div class="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
-                        <Button
-                            v-if="available(employee)"
-                            class="min-h-11"
-                            as-child
-                        >
-                            <Link :href="create(employee.id)"
-                                >Registrar adelanto</Link
-                            >
-                        </Button>
-                        <Button
-                            v-if="employee.pendingCents"
-                            variant="outline"
-                            class="min-h-11"
-                            @click="openDeduction(employee)"
-                        >
-                            Marcar como descontados
-                        </Button>
-                    </div>
                 </CardContent>
+                <CardFooter
+                    class="mt-auto grid gap-2 px-4 py-4 sm:grid-cols-[1fr_1.2fr]"
+                >
+                    <Button
+                        :as="available(employee) ? Link : 'button'"
+                        :href="
+                            available(employee)
+                                ? create(employee.id)
+                                : undefined
+                        "
+                        :variant="available(employee) ? 'default' : 'secondary'"
+                        :disabled="!available(employee)"
+                        class="min-h-11 w-full"
+                    >
+                        <Plus data-icon="inline-start" />
+                        Registrar adelanto
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        class="min-h-11 w-full"
+                        :disabled="!employee.pendingCents"
+                        @click="openDeduction(employee)"
+                    >
+                        <Check data-icon="inline-start" />
+                        Marcar como descontados
+                    </Button>
+                </CardFooter>
             </Card>
             <p v-if="!employees.length" class="text-sm text-muted-foreground">
                 Todavía no hay empleados configurados. Usa “Agregar empleado”
@@ -447,6 +552,14 @@ function confirmDeduction(): void {
                                 {{ line }}
                             </p>
                         </div>
+                        <Button
+                            v-if="row.canCorrect"
+                            as-child
+                            variant="outline"
+                            class="min-h-11"
+                        >
+                            <Link :href="correction(row.id)">Corregir</Link>
+                        </Button>
                     </li>
                 </ul>
             </template>
@@ -473,11 +586,22 @@ function confirmDeduction(): void {
                 <DialogHeader>
                     <DialogTitle>Confirmar descuento completo</DialogTitle>
                     <DialogDescription>
-                        {{ selectedEmployee.name }} · Pendiente
-                        {{ formatUsd(selectedEmployee.pendingCents) }}
+                        {{ selectedEmployee.name }}
                     </DialogDescription>
                 </DialogHeader>
-                <form class="grid gap-4" @submit.prevent="confirmDeduction">
+                <form
+                    novalidate
+                    class="grid gap-4"
+                    @submit.prevent="confirmDeduction"
+                >
+                    <RecordAmounts
+                        :amounts="[
+                            reviewAmount(
+                                'Descuento completo (USD)',
+                                selectedEmployee.pendingCents,
+                            ),
+                        ]"
+                    />
                     <p class="text-sm">
                         Confirma que este importe ya se descontó del sueldo. Se
                         marcarán todos los adelantos pendientes, se conservará

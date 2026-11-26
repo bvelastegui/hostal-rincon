@@ -9,7 +9,6 @@ import {
     NavigationMenuList,
 } from '@/components/ui/navigation-menu';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
-import { edit as editAppearance } from '@/routes/appearance';
 import { index as backups } from '@/routes/backups';
 import { edit as editBanks } from '@/routes/bank-settings';
 import { edit as editCash } from '@/routes/cash-settings';
@@ -20,7 +19,6 @@ const page = usePage();
 const settingsLinks = computed(() => [
     { title: 'Perfil', href: editProfile() },
     { title: 'Seguridad', href: editSecurity() },
-    { title: 'Apariencia', href: editAppearance() },
     ...(page.props.auth.canManageCashSettings
         ? [
               { title: 'Efectivo', href: editCash() },

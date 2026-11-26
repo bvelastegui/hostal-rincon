@@ -23,6 +23,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    fieldValue,
+    reviewAmount,
+    reviewSubmission,
+} from '@/lib/record-confirmation';
 import { edit } from '@/routes/bank-settings';
 const props = defineProps<{
     banks: { id: number; name: string }[];
@@ -45,6 +50,29 @@ const formAction = computed(() =>
 defineOptions({
     layout: { breadcrumbs: [{ title: 'Bancos', href: edit() }] },
 });
+function accountReview(data: FormData) {
+    const bank =
+        props.account?.bankName ??
+        props.banks.find(({ id }) => String(id) === fieldValue(data, 'bank_id'))
+            ?.name;
+    return {
+        title: props.account
+            ? 'Confirmar cambios de la cuenta'
+            : 'Confirmar nueva cuenta bancaria',
+        description: props.account?.locked
+            ? 'Se actualizará el alias de la cuenta.'
+            : 'Se guardarán los datos de la cuenta con el saldo inicial indicado.',
+        amounts: props.account?.locked
+            ? []
+            : [
+                  reviewAmount(
+                      'Saldo inicial (USD)',
+                      fieldValue(data, 'opening_balance'),
+                  ),
+              ],
+        details: [bank, fieldValue(data, 'name')],
+    };
+}
 </script>
 
 <template>
@@ -52,11 +80,13 @@ defineOptions({
         <Head :title="title" />
         <Heading variant="small" :title="title" />
         <Form
+            novalidate
             v-if="account || banks.length"
             :key="account?.id ?? 'new'"
             v-bind="formAction"
             v-slot="{ errors, processing }"
             error-bag="bankAccount"
+            @submit.capture="reviewSubmission($event, accountReview)"
         >
             <FieldGroup class="gap-5">
                 <Field

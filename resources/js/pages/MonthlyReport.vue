@@ -215,6 +215,7 @@ const advanceTotals = computed(() =>
                     </p>
                 </div>
                 <Form
+                    novalidate
                     v-if="report !== 'saldos'"
                     v-bind="monthly.form()"
                     v-slot="{ errors, processing }"

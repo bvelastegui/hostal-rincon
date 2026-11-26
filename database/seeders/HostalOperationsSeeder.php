@@ -179,8 +179,8 @@ class HostalOperationsSeeder extends Seeder
                 $this->advance($employee, $now, 15_000, 'Primer adelanto del ciclo actual');
             }
 
-            $this->advance($team[0], $now, Advance::LIMIT_CENTS - 15_001, 'Pendiente a un centavo del límite', $main);
-            $this->advance($team[1], $now, Advance::LIMIT_CENTS - 15_000, 'Saldo pendiente exactamente en USD 300', $main);
+            $this->advance($team[0], $now, $team[0]->advance_limit_cents - 15_001, 'Pendiente a un centavo del límite', $main);
+            $this->advance($team[1], $now, $team[1]->advance_limit_cents - 15_000, 'Saldo pendiente exactamente en el límite individual', $main);
             $this->cashMovement($operator, $shift, $now, 'income', 8_475, 'Cobro en efectivo del turno actual');
             $this->cashMovement($this->admin, $shift, $now, 'expense', 1_280, 'Compra de insumos registrada por administración', isSensitive: true);
             $this->deposit($operator, $shift, $now, 3_500, isSensitive: true);
@@ -205,7 +205,7 @@ class HostalOperationsSeeder extends Seeder
         }
     }
 
-    private function user(string $name, string $handle, string $password, CarbonImmutable $at, bool $isAdmin = false): User
+    private function user(string $name, string $handle, string $password, CarbonImmutable $at, bool $isAdmin = false, int $advanceLimitCents = User::DEFAULT_ADVANCE_LIMIT_CENTS): User
     {
         $user = new User;
         $user->forceFill([
@@ -214,6 +214,7 @@ class HostalOperationsSeeder extends Seeder
             'password' => $password,
             'email_verified_at' => $at->utc(),
             'is_admin' => $isAdmin,
+            'advance_limit_cents' => $advanceLimitCents,
             'created_at' => $at->utc(),
         ])->save();
 
@@ -294,7 +295,7 @@ class HostalOperationsSeeder extends Seeder
         $outgoing->forceFill(['password' => Str::random(64), 'remember_token' => null])->save();
         $this->cashMovement($this->admin, null, $at, 'income', 2_400, 'Cobro atendido por administración sin turno abierto');
 
-        $replacement = $this->user('Diana Vega', 'diana', $password, $at);
+        $replacement = $this->user('Diana Vega', 'diana', $password, $at, advanceLimitCents: 25_000);
         $this->makeCashRoom($replacement, null, $at, 50);
         $newShift = $this->openShift($replacement, $at, $this->cash() + 50);
         $this->count($newShift, $replacement, $at, 'opening', 50, 'Conteo de apertura por la nueva empleada');
@@ -348,7 +349,7 @@ class HostalOperationsSeeder extends Seeder
 
     private function advance(User $employee, CarbonImmutable $at, int $amount, string $note, ?BankAccount $account = null): void
     {
-        if ((int) $employee->pendingAdvances()->sum('amount_cents') + $amount > Advance::LIMIT_CENTS) {
+        if ($amount > $employee->remainingAdvanceCents((int) $employee->pendingAdvances()->sum('amount_cents'))) {
             throw new LogicException('La simulación intentó superar el límite de adelantos.');
         }
 

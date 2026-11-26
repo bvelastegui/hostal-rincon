@@ -20,8 +20,6 @@ class Advance extends Model
     /** @use HasFactory<AdvanceFactory> */
     use HasFactory;
 
-    public const int LIMIT_CENTS = 30_000;
-
     /** @return BelongsTo<User, $this> */
     public function employee(): BelongsTo
     {
@@ -35,9 +33,15 @@ class Advance extends Model
     }
 
     /** @param Builder<Advance> $query */
+    public function scopeEffective(Builder $query): void
+    {
+        $query->whereDoesntHave('cashMovement', fn (Builder $movements) => $movements->whereNotNull('voided_at'));
+    }
+
+    /** @param Builder<Advance> $query */
     public function scopePending(Builder $query): void
     {
-        $query->whereNull('deducted_at');
+        $query->effective()->whereNull('deducted_at');
     }
 
     /** @return array<string, string> */

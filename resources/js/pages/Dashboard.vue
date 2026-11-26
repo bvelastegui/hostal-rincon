@@ -1,39 +1,46 @@
 <script setup lang="ts">
-import { Head, Link, usePage } from '@inertiajs/vue3';
-import { useStorage } from '@vueuse/core';
+import { Head, Link } from '@inertiajs/vue3';
 import {
     ArrowDownLeft,
     ArrowLeftRight,
     ArrowUpRight,
     Banknote,
+    Building2,
     CheckCircle2,
     ChevronRight,
+    ClipboardCheck,
+    CreditCard,
     HandCoins,
     Landmark,
     ReceiptText,
     TriangleAlert,
+    UserRoundPlus,
     Wallet,
 } from '@lucide/vue';
-import { computed, nextTick, useTemplateRef, watchEffect } from 'vue';
-import { index as advances } from '@/actions/App/Http/Controllers/AdvanceController';
-import InitialSetupWidget from '@/components/InitialSetupWidget.vue';
+import { computed } from 'vue';
+import {
+    createEmployee,
+    index as advances,
+} from '@/actions/App/Http/Controllers/AdvanceController';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatUsd } from '@/lib/money';
+import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
+import { edit as banks } from '@/routes/bank-settings';
+import { create as createBankAccount } from '@/routes/bank-settings/accounts';
 import { index as cashClosings } from '@/routes/cash-closings';
 import {
     create as createMovement,
     index as movements,
 } from '@/routes/movements';
 import type { CashBalances } from '@/types/cash-movement';
-import type { DashboardAttention, PendingSetting } from '@/types/dashboard';
+import type { DashboardAttention } from '@/types/dashboard';
 
 const props = defineProps<{
     balances: CashBalances;
     attention: DashboardAttention;
-    pendingSettings: PendingSetting[];
 }>();
 
 defineOptions({
@@ -67,17 +74,57 @@ const quickActions = [
         href: advances(),
         variant: 'outline',
     },
+    {
+        label: 'Nuevo empleado',
+        icon: UserRoundPlus,
+        href: createEmployee(),
+        variant: 'secondary',
+    },
+    {
+        label: 'Agregar banco',
+        icon: Building2,
+        href: banks.url() + '#bank-name',
+        variant: 'secondary',
+    },
+    {
+        label: 'Nueva cuenta bancaria',
+        icon: CreditCard,
+        href: createBankAccount(),
+        variant: 'secondary',
+    },
+    {
+        label: 'Cierre independiente',
+        icon: ClipboardCheck,
+        href: cashClosings({ query: { accion: 'cierre-independiente' } }),
+        variant: 'secondary',
+    },
 ] as const;
 
 const balanceCards = computed(() => [
-    { label: 'Efectivo', cents: props.balances.cash, icon: Banknote },
-    { label: 'Bancos', cents: props.balances.bank, icon: Landmark },
+    {
+        label: 'Efectivo',
+        cents: props.balances.cash,
+        icon: Banknote,
+        iconClass: 'bg-success text-success-foreground',
+    },
+    {
+        label: 'Bancos',
+        cents: props.balances.bank,
+        icon: Landmark,
+        iconClass: 'bg-warning/35 text-warning-foreground',
+    },
     {
         label: 'En tránsito',
         cents: props.balances.transit,
         icon: ArrowLeftRight,
+        iconClass: 'bg-info/40 text-info-foreground',
     },
-    { label: 'Total', cents: props.balances.total, icon: Wallet },
+    {
+        label: 'Total',
+        cents: props.balances.total,
+        icon: Wallet,
+        iconClass: 'bg-secondary text-secondary-foreground',
+    },
 ]);
 
 const attentionItems = computed(() => {
@@ -88,6 +135,7 @@ const attentionItems = computed(() => {
             label: 'Transferencias por verificar',
             icon: ReceiptText,
             ...transfers,
+            badgeVariant: 'warning' as const,
             url: movements({
                 query: {
                     kind: 'income',
@@ -101,6 +149,7 @@ const attentionItems = computed(() => {
             label: 'Depósitos en tránsito',
             icon: ArrowLeftRight,
             ...deposits,
+            badgeVariant: 'info' as const,
             url: movements({ query: { kind: 'deposit', status: 'in_transit' } })
                 .url,
         },
@@ -108,6 +157,7 @@ const attentionItems = computed(() => {
             label: 'Faltantes de caja sin resolver',
             icon: TriangleAlert,
             ...shortages,
+            badgeVariant: 'destructive' as const,
             url:
                 cashClosings({
                     query: { difference: 'shortage', resolution: 'pending' },
@@ -115,32 +165,6 @@ const attentionItems = computed(() => {
         },
     ].filter(({ count }) => count > 0);
 });
-
-const page = usePage();
-const title = useTemplateRef<HTMLHeadingElement>('title');
-const hasPendingSettings = computed(() => props.pendingSettings.length > 0);
-const dismissed = useStorage(
-    `hostal-rincon:initial-setup-dismissed:${page.props.auth.user.id}`,
-    false,
-    undefined,
-    { initOnMounted: true, writeDefaults: false },
-);
-
-watchEffect(() => {
-    if (hasPendingSettings.value && dismissed.value) {
-        dismissed.value = false;
-    }
-});
-
-async function dismissSetup(): Promise<void> {
-    if (hasPendingSettings.value) {
-        return;
-    }
-
-    dismissed.value = true;
-    await nextTick();
-    title.value?.focus();
-}
 </script>
 
 <template>
@@ -148,13 +172,7 @@ async function dismissSetup(): Promise<void> {
 
     <div class="flex min-w-0 flex-1 flex-col gap-7">
         <header class="lg:sr-only">
-            <h1
-                ref="title"
-                tabindex="-1"
-                class="text-2xl font-semibold tracking-tight"
-            >
-                Panel
-            </h1>
+            <h1 class="text-2xl font-semibold tracking-tight">Panel</h1>
         </header>
         <section
             aria-labelledby="dashboard-balances"
@@ -172,22 +190,17 @@ async function dismissSetup(): Promise<void> {
                 <Card
                     v-for="balance in balanceCards"
                     :key="balance.label"
-                    class="min-w-0 py-3 shadow-none sm:py-4"
+                    class="min-w-0 bg-linear-to-br from-card via-card to-secondary/70 py-3 sm:py-4"
                 >
-                    <CardContent class="px-3 sm:px-4">
-                        <dl class="flex flex-col gap-1.5">
-                            <dt
-                                class="flex items-center gap-2 text-sm text-muted-foreground"
-                            >
-                                <component
-                                    :is="balance.icon"
-                                    class="size-4 shrink-0"
-                                    aria-hidden="true"
-                                />
+                    <CardContent
+                        class="flex items-center justify-between gap-2 px-3 sm:gap-4 sm:px-4"
+                    >
+                        <dl class="min-w-0">
+                            <dt class="text-sm text-muted-foreground">
                                 {{ balance.label }}
                             </dt>
                             <dd
-                                class="leading-tight font-semibold wrap-anywhere tabular-nums sm:text-xl"
+                                class="text-xl leading-tight font-semibold wrap-anywhere tabular-nums sm:text-2xl"
                             >
                                 {{
                                     balance.cents === null
@@ -196,6 +209,20 @@ async function dismissSetup(): Promise<void> {
                                 }}
                             </dd>
                         </dl>
+                        <span
+                            :class="
+                                cn(
+                                    'grid size-7 shrink-0 place-items-center rounded-lg sm:size-11 sm:rounded-xl',
+                                    balance.iconClass,
+                                )
+                            "
+                            aria-hidden="true"
+                        >
+                            <component
+                                :is="balance.icon"
+                                class="size-4 sm:size-6"
+                            />
+                        </span>
                     </CardContent>
                 </Card>
             </div>
@@ -224,15 +251,20 @@ async function dismissSetup(): Promise<void> {
                     <Button
                         as-child
                         :variant="action.variant"
-                        class="h-auto min-h-12 w-full justify-start gap-2 px-3 py-2 text-left whitespace-normal"
+                        :class="
+                            cn(
+                                'h-full min-h-12 w-full justify-between gap-2 rounded-lg px-3 py-2 text-left whitespace-normal',
+                                action.variant !== 'secondary' && 'shadow-sm',
+                            )
+                        "
                     >
                         <Link :href="action.href">
+                            <span>{{ action.label }}</span>
                             <component
                                 :is="action.icon"
-                                data-icon="inline-start"
+                                data-icon="inline-end"
                                 aria-hidden="true"
                             />
-                            <span>{{ action.label }}</span>
                         </Link>
                     </Button>
                 </li>
@@ -246,7 +278,7 @@ async function dismissSetup(): Promise<void> {
             <h2 id="dashboard-attention" class="text-lg font-semibold">
                 Por atender
             </h2>
-            <Card class="gap-0 py-0 shadow-none">
+            <Card class="gap-0 py-0">
                 <ul v-if="attentionItems.length" class="divide-y">
                     <li v-for="item in attentionItems" :key="item.label">
                         <Button
@@ -266,7 +298,7 @@ async function dismissSetup(): Promise<void> {
                                     <div class="flex min-w-0 flex-col gap-1">
                                         <span>{{ item.label }}</span>
                                         <Badge
-                                            variant="secondary"
+                                            :variant="item.badgeVariant"
                                             class="w-fit"
                                         >
                                             {{ item.count }}
@@ -293,21 +325,16 @@ async function dismissSetup(): Promise<void> {
                 </ul>
                 <p
                     v-else
-                    class="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground sm:px-4"
+                    class="flex min-h-14 items-center gap-3 px-3 py-3 text-sm sm:px-4"
                 >
-                    <CheckCircle2 class="size-4 shrink-0" aria-hidden="true" />
+                    <span
+                        class="grid size-7 shrink-0 place-items-center rounded-full bg-success text-success-foreground"
+                    >
+                        <CheckCircle2 class="size-4" aria-hidden="true" />
+                    </span>
                     No hay transferencias, depósitos ni faltantes por revisar.
                 </p>
             </Card>
         </section>
-
-        <InitialSetupWidget
-            v-if="
-                page.props.auth.canManageCashSettings &&
-                (hasPendingSettings || !dismissed)
-            "
-            :pending-settings="pendingSettings"
-            @dismiss="dismissSetup"
-        />
     </div>
 </template>

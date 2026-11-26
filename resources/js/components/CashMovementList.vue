@@ -28,9 +28,10 @@ withDefaults(
         movements: MovementRow[];
         showDate?: boolean;
         canManage?: boolean;
+        canManageDeposits?: boolean;
         readOnly?: boolean;
     }>(),
-    { canManage: true },
+    { canManage: true, canManageDeposits: false },
 );
 </script>
 
@@ -137,14 +138,18 @@ withDefaults(
                     {{ movementStatusLabels[movement.status] }}
                 </Badge>
                 <Button
-                    v-if="!readOnly && canManage && movementAction(movement)"
+                    v-if="
+                        !readOnly &&
+                        canManage &&
+                        movementAction(movement, canManageDeposits)
+                    "
                     as-child
                     variant="outline"
                     size="sm"
                     class="min-h-10"
                 >
                     <Link :href="edit(movement.id)">
-                        {{ movementAction(movement) }}
+                        {{ movementAction(movement, canManageDeposits) }}
                     </Link>
                 </Button>
                 <CashMovementCorrectionLink

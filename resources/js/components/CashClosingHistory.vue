@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { formatCashDifference, formatUsd } from '@/lib/money';
+import { reviewAmount, reviewSubmission } from '@/lib/record-confirmation';
 import { index, resolveShortage } from '@/routes/cash-closings';
 import type {
     CashClosingPage,
@@ -466,8 +467,30 @@ function saveResolution() {
                     >
                 </div>
                 <form
+                    novalidate
                     v-else
                     class="flex flex-col gap-4"
+                    @submit.capture="
+                        reviewSubmission($event, {
+                            title: 'Confirmar resolución del faltante',
+                            description:
+                                'La resolución quedará registrada en el historial de caja.',
+                            amounts: [
+                                reviewAmount(
+                                    'Faltante (USD)',
+                                    Math.abs(selected.differenceCents),
+                                ),
+                            ],
+                            details: [
+                                selected.responsible ?? undefined,
+                                resolutionOptions.find(
+                                    (option) =>
+                                        option.value === resolutionForm.method,
+                                )?.label,
+                            ],
+                            confirmLabel: 'Marcar como resuelto',
+                        })
+                    "
                     @submit.prevent="saveResolution"
                 >
                     <FieldGroup>

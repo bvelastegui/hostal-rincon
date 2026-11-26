@@ -21,7 +21,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('throttle:6,1')
         ->name('user-password.update');
 
-    Route::inertia('settings/appearance', 'settings/Appearance')->name('appearance.edit');
+    Route::redirect('settings/appearance', '/settings/profile');
 
     Route::prefix('settings/backups')->name('backups.')->can('manage-local-backups')->group(function () {
         Route::get('/', [LocalBackupController::class, 'index'])->name('index');

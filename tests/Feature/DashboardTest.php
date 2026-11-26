@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Bank;
 use App\Models\BankAccount;
 use App\Models\CashClosing;
 use App\Models\CashMovement;
@@ -29,37 +28,16 @@ test('los operadores son enviados a Turno incluso si tienen la caja abierta', fu
     $this->get(route('dashboard'))->assertRedirectToRoute('cash-closings.index');
 });
 
-test('el panel conserva la configuración inicial pendiente para la administradora', function () {
+test('el panel muestra los saldos sin configurar y no carga el widget de configuración inicial', function () {
     $this->actingAs(User::factory()->create(['is_admin' => true]))->withoutVite();
 
     $this->get(route('dashboard'))->assertInertia(fn (Assert $page) => $page->component('Dashboard')
-        ->where('pendingSettings', ['cash_opening', 'active_bank', 'bank_account'])
+        ->missing('pendingSettings')
         ->where('balances.cash', null)
         ->where('balances.total', null)
         ->where('attention.transfers', ['count' => 0, 'amountCents' => 0, 'dateFrom' => null, 'dateTo' => null])
         ->where('attention.deposits', ['count' => 0, 'amountCents' => 0])
         ->where('attention.shortages', ['count' => 0, 'amountCents' => 0]));
-
-    $cashOpening = CashOpening::query()->sole();
-    $cashOpening->opening_balance_cents = 0;
-    $cashOpening->save();
-    $activeBank = Bank::factory()->create();
-    $inactiveBank = Bank::factory()->create(['is_active' => false]);
-    BankAccount::factory()->for($inactiveBank)->create();
-
-    $this->get(route('dashboard'))->assertInertia(fn (Assert $page) => $page
-        ->where('pendingSettings', ['bank_account']));
-
-    BankAccount::factory()->for($activeBank)->create();
-
-    $this->get(route('dashboard'))->assertInertia(fn (Assert $page) => $page
-        ->where('pendingSettings', []));
-
-    $activeBank->is_active = false;
-    $activeBank->save();
-
-    $this->get(route('dashboard'))->assertInertia(fn (Assert $page) => $page
-        ->where('pendingSettings', ['active_bank', 'bank_account']));
 });
 
 test('el panel concilia los saldos y enlaza únicamente transferencias, depósitos y faltantes pendientes', function () {

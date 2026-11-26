@@ -29,7 +29,7 @@ http://{$HOSTAL_DESKTOP_ADDRESS} {
 			respond 204
 		}
 
-		@assets path /build/* /favicon.svg /favicon.ico /apple-touch-icon.png /robots.txt
+		@assets path /build/* /favicon.svg /favicon.ico /favicon.png /apple-touch-icon.png /robots.txt
 		handle @assets {
 			file_server
 		}

@@ -14,6 +14,14 @@ test('login screen can be rendered', function () {
         ->assertSee('<meta name="robots" content="noindex, nofollow">', escape: false);
 });
 
+test('el acceso usa el tema claro aunque se haya guardado una preferencia oscura', function () {
+    $this->withUnencryptedCookie('appearance', 'dark')
+        ->get(route('login'))
+        ->assertOk()
+        ->assertSee('name="color-scheme" content="light"', escape: false)
+        ->assertDontSee('class="dark"', escape: false);
+});
+
 test('users can authenticate using the login screen', function () {
     $user = User::factory()->create();
 

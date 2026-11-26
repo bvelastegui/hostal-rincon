@@ -81,7 +81,10 @@ export function movementAuditLines(movement: CashMovement): string[] {
     return lines;
 }
 
-export function movementAction(movement: MovementRow): string | null {
+export function movementAction(
+    movement: MovementRow,
+    canManageDeposits: boolean,
+): string | null {
     if (
         movement.redacted ||
         movement.confirmed ||
@@ -90,5 +93,9 @@ export function movementAction(movement: MovementRow): string | null {
     ) {
         return null;
     }
-    return movement.kind === 'deposit' ? 'Gestionar depósito' : 'Confirmar';
+    if (movement.kind === 'deposit') {
+        return canManageDeposits ? 'Gestionar depósito' : null;
+    }
+
+    return 'Confirmar';
 }

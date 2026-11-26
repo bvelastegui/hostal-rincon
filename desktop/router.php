@@ -16,7 +16,7 @@ if ($path === '/desktop-ready') {
 }
 
 $public = realpath($_SERVER['DOCUMENT_ROOT']);
-if ($path && preg_match('~^/(?:build/[a-zA-Z0-9_./-]+|favicon\.(?:svg|ico)|apple-touch-icon\.png|robots\.txt)$~D', $path)) {
+if ($path && preg_match('~^/(?:build/[a-zA-Z0-9_./-]+|favicon\.(?:svg|ico|png)|apple-touch-icon\.png|robots\.txt)$~D', $path)) {
     $file = realpath($public.$path);
     if ($file && str_starts_with($file, $public.DIRECTORY_SEPARATOR) && is_file($file) && ! str_ends_with(strtolower($file), '.php')) {
         return false;

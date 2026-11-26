@@ -314,6 +314,44 @@ test('un egreso por transferencia usa solo el saldo acreditado de la cuenta sele
     $this->get(route('movements.index'))->assertInertia(fn (Assert $page) => $page->where('balances.bank', 10000));
 });
 
+test('la consulta inmediata comprueba fondos bancarios sin publicar el saldo al operador', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $operator = User::factory()->create();
+    CashOpening::query()->update(['opening_balance_cents' => 8500]);
+    $account = BankAccount::factory()->create(['opening_balance_cents' => 1500]);
+    $secondAccount = BankAccount::factory()->create(['opening_balance_cents' => 9000]);
+    $form = route('movements.create', ['kind' => 'expense']);
+    $check = route('movements.check-bank-funds');
+    $input = ['bank_account_id' => $account->id, 'amount' => '15,00'];
+
+    $this->actingAs($admin)->get($form)->assertInertia(fn (Assert $page) => $page
+        ->where('expenseCashCents', 8500)
+        ->where('banks', fn ($banks) => collect($banks)->firstWhere('id', $account->id)['balanceCents'] === 1500));
+    $this->actingAs($operator)->postJson($check, $input)->assertForbidden();
+
+    openMovementShift($operator);
+    $this->get($form)->assertInertia(fn (Assert $page) => $page
+        ->where('expenseCashCents', 8500)
+        ->missing('banks.0.balanceCents')
+        ->missing('banks.1.balanceCents'));
+    $this->postJson($check, $input)->assertNoContent();
+    $this->postJson($check, [...$input, 'amount' => '15,01'])
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.amount.0', 'El monto supera el saldo disponible en la cuenta seleccionada.');
+    $this->postJson($check, [...$input, 'bank_account_id' => $secondAccount->id, 'amount' => '15,01'])->assertNoContent();
+
+    $this->post(route('movements.store'), [
+        ...$input,
+        'request_id' => (string) Str::uuid(),
+        'kind' => 'expense',
+        'payment_method' => 'transfer',
+        'description' => 'Pago bancario',
+        'voucher' => 'PRUEBA-01',
+        'amount' => '15,01',
+    ])->assertSessionHasErrors(['amount' => 'El monto supera el saldo disponible en la cuenta seleccionada.']);
+    $this->assertDatabaseCount('cash_movements', 0);
+});
+
 test('traslada efectivo a tránsito y luego a banco sin variar el total ni duplicar los importes', function () {
     $administrator = User::factory()->create(['is_admin' => true]);
     $responsible = User::factory()->create();
@@ -394,7 +432,73 @@ test('traslada efectivo a tránsito y luego a banco sin variar el total ni dupli
     ])->assertSessionHasErrors('voucher');
 });
 
-test('solo la administradora puede consultar y gestionar depósitos y devoluciones', function () {
+test('el operador registra un depósito en tránsito durante su turno y la administradora lo confirma', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $operator = User::factory()->create();
+    $other = User::factory()->create();
+    $account = BankAccount::factory()->create(['opening_balance_cents' => 1000]);
+    CashOpening::query()->update(['opening_balance_cents' => 10000]);
+    $shift = openMovementShift($operator);
+    $form = route('movements.create', ['kind' => 'deposit']);
+    $deposit = [
+        'kind' => 'deposit',
+        'request_id' => (string) Str::uuid(),
+        'amount' => '40,15',
+        'responsible_id' => $operator->id,
+        'confirm' => true,
+        'bank_account_id' => $account->id,
+        'voucher' => 'DEP-OPERADOR',
+    ];
+
+    $this->actingAs($other)->get($form)->assertRedirectToRoute('cash-closings.index');
+    $this->post(route('movements.store'), $deposit)->assertForbidden();
+    $this->actingAs($admin)->get($form)->assertInertia(fn (Assert $page) => $page
+        ->where('defaultResponsibleId', $operator->id));
+    $this->actingAs($operator)->get($form)->assertInertia(fn (Assert $page) => $page
+        ->where('defaultResponsibleId', $operator->id)
+        ->where('depositCashCents', 10000)
+        ->has('banks', 0));
+
+    $this->post(route('movements.store'), $deposit)->assertRedirect()->assertSessionHasNoErrors();
+    $movement = CashMovement::query()->sole();
+    $this->assertDatabaseHas('cash_movements', [
+        'id' => $movement->id,
+        'kind' => 'deposit',
+        'cash_shift_id' => $shift->id,
+        'responsible_id' => $operator->id,
+        'recorded_by' => $operator->id,
+        'amount_cents' => 4015,
+        'confirmed_at' => null,
+        'bank_account_id' => null,
+        'voucher' => null,
+    ]);
+    $this->get(route('movements.index', ['kind' => 'deposit']))->assertInertia(fn (Assert $page) => $page
+        ->where('balances.cash', 5985)
+        ->where('balances.bank', 0)
+        ->has('movements.data', 1)
+        ->where('movements.data.0.id', $movement->id)
+        ->where('movements.data.0.status', 'in_transit'));
+    $this->get(route('movements.index', ['kind' => 'transaction']))->assertInertia(fn (Assert $page) => $page
+        ->has('movements.data', 0));
+
+    $confirmation = ['bank_account_id' => $account->id, 'voucher' => 'DEP-OPERADOR'];
+    $this->patch(route('movements.update', $movement), $confirmation)->assertForbidden();
+    $this->actingAs($admin)->patch(route('movements.update', $movement), $confirmation)
+        ->assertRedirect()->assertSessionHasNoErrors();
+    $this->assertDatabaseHas('cash_movements', [
+        'id' => $movement->id,
+        'bank_account_id' => $account->id,
+        'voucher' => 'DEP-OPERADOR',
+        'confirmed_by' => $admin->id,
+    ]);
+    $this->get(route('movements.index'))->assertInertia(fn (Assert $page) => $page
+        ->where('balances.cash', 5985)
+        ->where('balances.bank', 5015)
+        ->where('balances.transit', 0)
+        ->where('balances.total', 11000));
+});
+
+test('solo la administradora puede gestionar la confirmación y devolución de depósitos', function () {
     $administrator = User::factory()->create(['is_admin' => true]);
     $operator = User::factory()->create();
     $account = BankAccount::factory()->create(['opening_balance_cents' => 1000]);
@@ -411,8 +515,6 @@ test('solo la administradora puede consultar y gestionar depósitos y devolucion
     $confirm = ['bank_account_id' => $account->id, 'voucher' => 'DEP-DEVUELTO'];
 
     $this->actingAs($operator);
-    $this->get(route('movements.create', ['kind' => 'deposit']))->assertForbidden();
-    $this->post(route('movements.store'), ['kind' => 'deposit'])->assertForbidden();
     $this->get(route('movements.edit', $movement))->assertForbidden();
     $this->patch(route('movements.update', $movement), $confirm)->assertForbidden();
     $this->patch(route('movements.return-to-cash', $movement))->assertForbidden();

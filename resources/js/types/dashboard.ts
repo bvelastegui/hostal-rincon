@@ -1,5 +1,3 @@
-export type PendingSetting = 'cash_opening' | 'active_bank' | 'bank_account';
-
 type PendingAmount = { count: number; amountCents: number };
 
 export type DashboardAttention = {

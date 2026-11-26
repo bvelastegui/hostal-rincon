@@ -52,10 +52,11 @@ test('la configuración restaura un ZIP anterior con los cambios confirmados del
     ]);
 
     try {
-        $this->artisan('migrate', ['--database' => 'backup_fixture'])->assertSuccessful();
-        $this->artisan('migrate:rollback', [
+        $this->artisan('migrate', [
             '--database' => 'backup_fixture',
-            '--step' => 1,
+            '--realpath' => true,
+            '--path' => array_values(array_filter(File::glob(database_path('migrations/*.php')),
+                fn (string $migration): bool => basename($migration) < '2026_11_25_235000_add_usernames_to_users.php')),
         ])->assertSuccessful();
         DB::setDefaultConnection('backup_fixture');
 
@@ -174,7 +175,8 @@ test('la configuración restaura un ZIP anterior con los cambios confirmados del
             ->and(DB::connection()->getPdo()->query('PRAGMA journal_mode')->fetchColumn())->toBe('wal');
 
         $restoredAdmin = User::findOrFail($admin->id);
-        expect($restoredAdmin->username)->toBe('administracion')
+        expect($restoredAdmin->advance_limit_cents)->toBe(30_000)
+            ->and($restoredAdmin->username)->toBe('administracion')
             ->and($restoredAdmin->name)->toBe('Registro confirmado')
             ->and(Hash::check('password', $restoredAdmin->password))->toBeTrue();
 

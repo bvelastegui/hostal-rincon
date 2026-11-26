@@ -3,7 +3,6 @@
 namespace App\Http\Requests;
 
 use App\Actions\ConvertUsdToCents;
-use App\Models\Advance;
 use Illuminate\Support\Facades\Gate;
 
 class StoreAdvanceRequest extends ConfirmCashMovementRequest
@@ -18,7 +17,8 @@ class StoreAdvanceRequest extends ConfirmCashMovementRequest
     {
         return [
             'request_id' => ['required', 'uuid'],
-            'amount' => ['required', 'numeric', 'decimal:0,2', 'gt:0', 'max:'.(Advance::LIMIT_CENTS / 100)],
+            'void_reason' => [$this->routeIs('advances.replace') ? 'required' : 'exclude', 'string', 'max:255'],
+            'amount' => ['required', ...ConvertUsdToCents::OPENING_BALANCE_RULES, 'gt:0'],
             'note' => ['nullable', 'string', 'max:500'],
             'payment_method' => ['required', 'in:cash,transfer'],
             'bank_account_id' => ['exclude_unless:payment_method,transfer', 'required', 'integer', 'exists:bank_accounts,id'],
@@ -30,10 +30,12 @@ class StoreAdvanceRequest extends ConfirmCashMovementRequest
     public function messages(): array
     {
         return [
+            'void_reason.required' => 'Ingresa el motivo de la corrección.',
+            'void_reason.max' => 'El motivo de la corrección admite hasta 255 caracteres.',
             'amount.required' => 'Ingresa el monto del adelanto.',
             'amount.decimal' => 'Ingresa un monto con hasta dos decimales.',
             'amount.gt' => 'El monto debe ser mayor que cero.',
-            'amount.max' => 'El monto supera el límite de adelantos.',
+            'amount.max' => 'El monto excede el máximo admitido.',
             'payment_method.required' => 'Selecciona la forma de pago del adelanto.',
             'payment_method.in' => 'Selecciona efectivo o transferencia bancaria.',
             'bank_account_id.required' => 'Selecciona la cuenta bancaria de origen.',

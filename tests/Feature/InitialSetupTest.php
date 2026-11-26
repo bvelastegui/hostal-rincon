@@ -54,6 +54,11 @@ test('Laravel valida la cuenta y el efectivo por paso sin guardar la configuraci
     $this->postJson($url, ['opening_balance' => '125,50'], $cash)
         ->assertNoContent()->assertHeader('Precognition-Success', 'true');
 
+    $banks = ['Precognition' => 'true', 'Precognition-Validate-Only' => 'accounts,accounts.*,accounts.*.bank,accounts.*.name,accounts.*.opening_balance'];
+    $this->postJson($url, ['accounts' => [['bank' => 'Banco', 'name' => '', 'opening_balance' => '0']]], $banks)
+        ->assertUnprocessable()->assertJsonValidationErrors('accounts.0.name');
+    $this->postJson($url, [], $banks)->assertNoContent();
+
     $this->assertGuest();
     $this->assertDatabaseCount('users', 0);
     $this->assertDatabaseCount('bank_accounts', 0);
@@ -103,6 +108,43 @@ test('un alias duplicado revierte todos los datos y permite configurar de nuevo 
     $this->post(route('initial-setup.store'), initialSetupData())->assertRedirectToRoute('dashboard');
     $this->assertDatabaseHas('cash_openings', ['opening_balance_cents' => 0]);
     $this->assertDatabaseCount('bank_accounts', 0);
+});
+
+test('el asistente guarda operadores opcionales con límites individuales y protege sus contraseñas', function () {
+    $first = [
+        'name' => 'Recepción en la mañana',
+        'username' => 'Recepcion.Manana',
+        'password' => ' Prueba123! ',
+        'password_confirmation' => ' Prueba123! ',
+        'advance_limit' => '125,50',
+    ];
+    $second = [
+        ...$first,
+        'name' => 'Recepción en la tarde',
+        'username' => 'recepcion.tarde',
+        'advance_limit' => '0',
+    ];
+    $url = route('initial-setup.store');
+    $this->from(route('initial-setup.create'))->post($url, initialSetupData([
+        'employees' => [$first, [...$second, 'username' => 'recepcion.manana']],
+    ]))->assertSessionHasErrors(['employees.0.username', 'employees.1.username'])
+        ->assertSessionMissing('_old_input.employees');
+    $this->post($url, initialSetupData([
+        'employees' => [[...$first, 'username' => 'admin.hostal', 'password_confirmation' => 'distinta']],
+    ]))->assertSessionHasErrors(['employees.0.username', 'employees.0.password']);
+    $this->assertDatabaseCount('users', 0);
+    $this->assertDatabaseHas('cash_openings', ['opening_balance_cents' => null]);
+
+    $this->post($url, initialSetupData(['employees' => [$first, $second]]))
+        ->assertSessionHasNoErrors()->assertRedirectToRoute('dashboard');
+
+    expect(User::query()->where('is_admin', true)->sole()->username)->toBe('admin.hostal');
+    $this->assertAuthenticatedAs(User::query()->where('is_admin', true)->sole());
+    $operator = User::query()->operators()->where('username', 'recepcion.manana')->sole();
+    expect($operator->advance_limit_cents)->toBe(12_550)
+        ->and($operator->email)->toBeNull()
+        ->and(Hash::check(' Prueba123! ', $operator->password))->toBeTrue();
+    $this->assertDatabaseHas('users', ['username' => 'recepcion.tarde', 'is_admin' => false, 'advance_limit_cents' => 0]);
 });
 
 test('una instalación con usuarios conserva el inicio de sesión', function () {

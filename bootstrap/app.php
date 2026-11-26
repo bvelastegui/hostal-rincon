@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\PreventSearchIndexing;
 use App\Http\Middleware\ProtectSharedBrowserSession;
@@ -20,17 +19,19 @@ $app = Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->append(PreventSearchIndexing::class);
 
-        $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
+        $middleware->trimStrings(except: ['employees.*.password', 'employees.*.password_confirmation']);
+
+        $middleware->encryptCookies(except: ['sidebar_state']);
 
         $middleware->web(append: [
             ProtectSharedBrowserSession::class,
-            HandleAppearance::class,
             RestrictEmployeeDuringCashShift::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->dontFlash(['employees']);
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );

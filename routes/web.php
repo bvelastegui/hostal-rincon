@@ -36,6 +36,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/', [CashMovementController::class, 'index'])->name('index');
         Route::get('nuevo', [CashMovementController::class, 'create'])->name('create');
         Route::post('/', [CashMovementController::class, 'store'])->name('store');
+        Route::post('validar-fondos-bancarios', [CashMovementController::class, 'checkBankFunds'])->name('check-bank-funds');
         Route::get('{movement}/corregir', [CashMovementController::class, 'correction'])
             ->can('correct-movements')->name('correction');
         Route::post('{movement}/reemplazar', [CashMovementController::class, 'replace'])
@@ -55,6 +56,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('empleados', [AdvanceController::class, 'storeEmployee'])->name('employees.store');
         Route::get('empleados/{employee}/editar', [AdvanceController::class, 'editEmployee'])->name('employees.edit');
         Route::put('empleados/{employee}', [AdvanceController::class, 'updateEmployee'])->name('employees.update');
+        Route::get('historial/{advance}/corregir', [AdvanceController::class, 'correction'])->name('correction');
+        Route::post('historial/{advance}/corregir', [AdvanceController::class, 'replace'])->name('replace');
         Route::get('{employee}/nuevo', [AdvanceController::class, 'create'])->name('create');
         Route::post('{employee}', [AdvanceController::class, 'store'])->name('store');
         Route::post('{employee}/descuento', [AdvanceController::class, 'deduct'])->name('deduct');

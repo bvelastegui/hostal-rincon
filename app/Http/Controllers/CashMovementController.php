@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\CalculateCashBalances;
 use App\Actions\ConfirmCashMovement;
+use App\Actions\ConvertUsdToCents;
 use App\Actions\CorrectCashMovement;
 use App\Actions\GroupCashMovementHistory;
 use App\Actions\PresentCashMovement;
@@ -19,6 +20,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -39,7 +41,9 @@ class CashMovementController extends Controller
     {
         $user = $request->user();
         $canManageDeposits = Gate::allows('manage-deposits');
-        $kinds = $user->is_admin ? array_keys(CashMovement::OPERATOR_KIND) : array_values(array_unique(CashMovement::OPERATOR_KIND));
+        $kinds = $user->is_admin
+            ? array_keys(CashMovement::OPERATOR_KIND)
+            : [...array_values(array_unique(CashMovement::OPERATOR_KIND)), 'deposit'];
         $filters = $request->validate([
             'date' => [$canManageDeposits ? 'nullable' : 'exclude', 'date_format:Y-m-d'],
             'date_from' => $canManageDeposits ? ['nullable', 'required_with:date_to', 'date_format:Y-m-d'] : ['exclude'],
@@ -59,7 +63,10 @@ class CashMovementController extends Controller
 
         if (! $user->is_admin) {
             $scope->where('cash_shift_id', $visibleShiftId ?? 0)
-                ->where(fn ($query) => $query->whereIn('kind', ['income', 'expense', 'advance'])->orWhere('is_sensitive', true));
+                ->where(fn (Builder $query) => $query
+                    ->whereIn('kind', ['income', 'expense', 'advance'])
+                    ->orWhere('is_sensitive', true)
+                    ->orWhere(fn (Builder $deposit) => $deposit->where('kind', 'deposit')->where('recorded_by', $user->id)));
         }
 
         $period = clone $scope;
@@ -139,8 +146,14 @@ class CashMovementController extends Controller
     private function filterMovements(Builder $query, array $filters, bool $isAdmin): Builder
     {
         if (isset($filters['kind'])) {
-            $kinds = $isAdmin ? [$filters['kind']] : array_keys(CashMovement::OPERATOR_KIND, $filters['kind'], true);
-            $query->whereIn('kind', $kinds);
+            $kind = $filters['kind'];
+
+            if ($isAdmin || $kind === 'deposit') {
+                $query->where('kind', $kind)->when(! $isAdmin, fn (Builder $query) => $query->where('is_sensitive', false));
+            } else {
+                $query->whereIn('kind', array_keys(CashMovement::OPERATOR_KIND, $kind, true))
+                    ->when($kind === 'transaction', fn (Builder $query) => $query->where('is_sensitive', true));
+            }
         }
 
         if (isset($filters['recorded_by'])) {
@@ -160,30 +173,48 @@ class CashMovementController extends Controller
 
     public function create(Request $request, CalculateCashBalances $calculateCashBalances): Response
     {
-        $restriction = CashShift::movementRestriction($request->user(), CashShift::active());
+        $shift = CashShift::active();
+        $restriction = CashShift::movementRestriction($request->user(), $shift);
         abort_if($restriction !== null, 403, $restriction ?? '');
 
         $kind = $request->validate(['kind' => ['nullable', 'in:income,expense,deposit']])['kind'] ?? 'income';
 
-        if ($kind === 'deposit') {
-            Gate::authorize('manage-deposits');
-        }
-
-        return $this->newMovementForm($kind, $calculateCashBalances);
+        return $this->newMovementForm($kind, $calculateCashBalances, $request->user()->is_admin, $shift);
     }
 
-    public function correction(CashMovement $movement, CalculateCashBalances $balances): Response
+    public function correction(Request $request, CashMovement $movement, CalculateCashBalances $balances): Response
     {
         $shift = CashShift::active();
         $blocked = $this->corrections->blockedReason($movement, $shift, $this->corrections->lastClosing($shift));
         abort_if($blocked !== null, 403, $blocked ?? '');
 
-        return $this->newMovementForm($movement->kind, $balances, $movement);
+        return $this->newMovementForm($movement->kind, $balances, $request->user()->is_admin, $shift, $movement);
     }
 
-    private function newMovementForm(string $kind, CalculateCashBalances $balances, ?CashMovement $original = null): Response
+    private function newMovementForm(string $kind, CalculateCashBalances $balances, bool $isAdmin, ?CashShift $shift, ?CashMovement $original = null): Response
     {
-        $cash = $kind === 'deposit' ? $balances->handle(includeTransit: true)['cash'] : null;
+        $showBankBalances = $kind === 'expense' && $isAdmin;
+        $available = in_array($kind, ['expense', 'deposit'], true)
+            ? $balances->handle(includeTransit: true, includeAccounts: $showBankBalances)
+            : null;
+        $cash = $available['cash'] ?? null;
+        $banks = $kind !== 'deposit' || $original?->confirmed_at !== null ? $this->confirmation->bankAccounts() : [];
+
+        // El reemplazo se valida después de anular la salida anterior.
+        if ($cash !== null && $original !== null && ($kind === 'deposit' || $original->payment_method === 'cash')) {
+            $cash += $original->amount_cents;
+        }
+
+        if ($showBankBalances) {
+            $bankBalances = array_column($available['accounts'] ?? [], 'balanceCents', 'id');
+            if ($original?->bank_account_id !== null) {
+                $bankBalances[$original->bank_account_id] = ($bankBalances[$original->bank_account_id] ?? 0) + $original->amount_cents;
+            }
+            $banks = array_map(fn (array $bank): array => [
+                ...$bank,
+                'balanceCents' => $bankBalances[$bank['id']] ?? 0,
+            ], $banks);
+        }
 
         return Inertia::render('CashMovementForm', [
             'kind' => $kind,
@@ -202,10 +233,12 @@ class CashMovementController extends Controller
                 'confirmed' => $original->confirmed_at !== null,
                 'isSensitive' => $original->isSensitive(),
             ],
-            'depositCashCents' => $cash === null ? null : $cash + ($original->amount_cents ?? 0),
-            'banks' => $kind !== 'deposit' || $original?->confirmed_at !== null ? $this->confirmation->bankAccounts() : [],
+            'depositCashCents' => $kind === 'deposit' ? $cash : null,
+            'expenseCashCents' => $kind === 'expense' ? $cash : null,
+            'banks' => $banks,
             'originBanks' => $kind === 'income' ? Bank::query()->active()->orderBy('name')->get(['id', 'name']) : [],
             'responsibleUsers' => $kind === 'deposit' ? User::query()->orderBy('name')->get(['id', 'name']) : [],
+            'defaultResponsibleId' => $kind === 'deposit' ? $shift?->responsible_id : null,
         ]);
     }
 
@@ -235,6 +268,24 @@ class CashMovementController extends Controller
             'originBanks' => [],
             'responsibleUsers' => [],
         ]);
+    }
+
+    public function checkBankFunds(Request $request, CalculateCashBalances $balances): HttpResponse
+    {
+        $this->authorizeMovement($request->user());
+        $request->merge(['amount' => ConvertUsdToCents::normalize($request->input('amount'))]);
+        $data = $request->validate([
+            'amount' => ['required', ...ConvertUsdToCents::OPENING_BALANCE_RULES, 'gt:0'],
+            'bank_account_id' => ['required', 'integer', 'exists:bank_accounts,id'],
+        ]);
+        $account = $this->confirmation->activeBankAccount((int) $data['bank_account_id']);
+        $balances->ensureFundsAvailable(
+            ConvertUsdToCents::fromDecimal((string) $data['amount']),
+            $account,
+            revealBalance: $request->user()->is_admin,
+        );
+
+        return response()->noContent();
     }
 
     public function replace(StoreCashMovementRequest $request, CalculateCashBalances $balances, CashMovement $movement): RedirectResponse
@@ -322,7 +373,7 @@ class CashMovementController extends Controller
                     : $this->confirmation->activeBankAccount($attributes['bank_account_id']);
 
                 if ($attributes['kind'] === 'expense') {
-                    $calculateCashBalances->ensureFundsAvailable($attributes['amount_cents'], $account);
+                    $calculateCashBalances->ensureFundsAvailable($attributes['amount_cents'], $account, revealBalance: $account === null || $user->is_admin);
                 }
 
                 if (isset($attributes['bank_id'])) {

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { formatCashDifference, formatUsd } from '@/lib/money';
+import { reviewAmount, reviewSubmission } from '@/lib/record-confirmation';
 import {
     administrativeClose,
     index,
@@ -33,7 +34,7 @@ const props = defineProps<{
     canReceive: boolean;
     canDeliver: boolean;
     isOwner: boolean;
-    startReceiving: boolean;
+    initialAction: 'receive' | 'close' | null;
     activeShift: {
         id: number;
         responsible: string;
@@ -62,7 +63,7 @@ const assignment = useForm({ responsible_id: '' });
 const page = usePage();
 const selectedAction = ref<
     'deliver' | 'receive' | 'close' | 'administrative' | null
->(props.startReceiving && props.canReceive ? 'receive' : null);
+>(props.initialAction);
 const action = computed(() => {
     if (!props.activeShift && !props.canClose) {
         return 'opening';
@@ -152,6 +153,33 @@ const formCopy = {
 function selectAction(next: typeof selectedAction.value) {
     form.resetAndClearErrors();
     selectedAction.value = next;
+}
+
+function closingReview() {
+    if (!action.value) {
+        return null;
+    }
+
+    const copy = formCopy[action.value];
+    return {
+        title: copy.title,
+        description: copy.description,
+        confirmLabel: copy.submit,
+        amounts: [
+            reviewAmount(copy.label, form.counted_cash),
+            reviewAmount('Efectivo esperado (USD)', props.expectedCashCents),
+            ...(difference.value
+                ? [
+                      reviewAmount(
+                          difference.value < 0
+                              ? 'Faltante (USD)'
+                              : 'Sobrante (USD)',
+                          Math.abs(difference.value),
+                      ),
+                  ]
+                : []),
+        ],
+    };
 }
 
 function submit() {
@@ -256,8 +284,30 @@ function submit() {
                     class="flex min-w-0 flex-col gap-5 border-t pt-4 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8"
                 >
                     <form
+                        novalidate
                         v-if="!activeShift && canClose && !action"
                         class="flex flex-col gap-4"
+                        @submit.capture="
+                            reviewSubmission($event, {
+                                title: 'Confirmar inicio de turno',
+                                description:
+                                    'La caja quedará a cargo del responsable seleccionado.',
+                                amounts: [
+                                    reviewAmount(
+                                        'Efectivo disponible (USD)',
+                                        expectedCashCents,
+                                    ),
+                                ],
+                                details: [
+                                    responsibleOptions.find(
+                                        (option) =>
+                                            option.value ===
+                                            assignment.responsible_id,
+                                    )?.label,
+                                ],
+                                confirmLabel: 'Iniciar turno',
+                            })
+                        "
                         @submit.prevent="assignment.submit(startShift())"
                     >
                         <SelectField
@@ -358,8 +408,12 @@ function submit() {
                         efectivo para operar la caja.
                     </p>
                     <form
+                        novalidate
                         v-else-if="expectedCashCents !== null && action"
                         class="flex flex-col gap-5"
+                        @submit.capture="
+                            reviewSubmission($event, closingReview)
+                        "
                         @submit.prevent="submit"
                     >
                         <div class="flex flex-col gap-1">

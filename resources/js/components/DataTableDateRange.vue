@@ -79,7 +79,11 @@ function reset() {
             </Button>
         </PopoverTrigger>
         <PopoverContent align="start" aria-label="Rango de fechas">
-            <form class="flex flex-col gap-3" @submit.prevent="apply">
+            <form
+                novalidate
+                class="flex flex-col gap-3"
+                @submit.prevent="apply"
+            >
                 <Field>
                     <FieldLabel :for="id + '-from'">Desde</FieldLabel>
                     <Input
@@ -111,7 +115,10 @@ function reset() {
                         @click="reset"
                         >{{ resetLabel }}</Button
                     >
-                    <Button type="submit" size="sm" :disabled="invalid"
+                    <Button
+                        type="submit"
+                        size="sm"
+                        :disabled="!from || !to || invalid"
                         >Aplicar</Button
                     >
                 </div>

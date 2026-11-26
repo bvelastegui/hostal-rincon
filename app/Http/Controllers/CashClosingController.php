@@ -26,6 +26,7 @@ class CashClosingController extends Controller
         $shift = CashShift::active();
         $isOwner = $shift?->responsible_id === $request->user()->id;
         $canClose = Gate::allows('manage-cash-closings');
+        $canReceive = $shift?->delivered_cash_cents !== null && ! $isOwner;
         $filters = $canClose ? $request->validate([
             'date_from' => ['nullable', 'required_with:date_to', 'date_format:Y-m-d'],
             'date_to' => ['nullable', 'required_with:date_from', 'date_format:Y-m-d', 'after_or_equal:date_from'],
@@ -39,10 +40,14 @@ class CashClosingController extends Controller
             'expectedCashCents' => $balances->handle(true)['cash'],
             'requestId' => (string) Str::uuid(),
             'canClose' => $canClose,
-            'canReceive' => $shift?->delivered_cash_cents !== null && ! $isOwner,
+            'canReceive' => $canReceive,
             'canDeliver' => $isOwner && $shift->delivered_cash_cents === null,
             'isOwner' => $isOwner,
-            'startReceiving' => $request->query('accion') === 'recibir',
+            'initialAction' => match ($request->query('accion')) {
+                'recibir' => $canReceive ? 'receive' : null,
+                'cierre-independiente' => $canClose ? 'close' : null,
+                default => null,
+            },
             'activeShift' => $shift === null ? null : [
                 'id' => $shift->id,
                 'responsible' => $shift->responsible_name,

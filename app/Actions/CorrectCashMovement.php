@@ -17,11 +17,11 @@ final class CorrectCashMovement
         return $shift === null ? null : CashClosing::query()->where('cash_shift_id', $shift->id)->latest('id')->first();
     }
 
-    public function blockedReason(CashMovement $movement, ?CashShift $shift, ?CashClosing $closing): ?string
+    public function blockedReason(CashMovement $movement, ?CashShift $shift, ?CashClosing $closing, bool $forAdvance = false): ?string
     {
         return match (true) {
             $movement->voided_at !== null => 'El movimiento ya está anulado.',
-            $movement->kind === 'advance' => 'Los adelantos se gestionan desde su módulo.',
+            $movement->kind === 'advance' && ! $forAdvance => 'Los adelantos se gestionan desde su módulo.',
             $movement->returned_at !== null => 'El efectivo de este retiro ya volvió a caja.',
             $shift === null || $shift->delivered_cash_cents !== null || $movement->cash_shift_id !== $shift->id => 'Solo puedes corregir movimientos del turno abierto antes de entregar la caja.',
             $closing !== null && ($closing->last_movement_id === null
@@ -31,9 +31,9 @@ final class CorrectCashMovement
         };
     }
 
-    public function void(CashMovement $movement, User $user, string $reason, ?CashShift $shift): void
+    public function void(CashMovement $movement, User $user, string $reason, ?CashShift $shift, bool $forAdvance = false): void
     {
-        $blocked = $this->blockedReason($movement, $shift, $this->lastClosing($shift));
+        $blocked = $this->blockedReason($movement, $shift, $this->lastClosing($shift), $forAdvance);
 
         if ($blocked !== null) {
             throw ValidationException::withMessages(['movement' => $blocked]);

@@ -7,6 +7,7 @@ import {
     updateEmployee,
 } from '@/actions/App/Http/Controllers/AdvanceController';
 import AccountIdentifierField from '@/components/AccountIdentifierField.vue';
+import OpeningBalanceField from '@/components/OpeningBalanceField.vue';
 import { Button } from '@/components/ui/button';
 import {
     Field,
@@ -16,6 +17,11 @@ import {
     FieldLabel,
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import {
+    fieldValue,
+    reviewAmount,
+    reviewSubmission,
+} from '@/lib/record-confirmation';
 
 const props = defineProps<{
     employee: {
@@ -24,6 +30,7 @@ const props = defineProps<{
         email: string | null;
         username: string | null;
     } | null;
+    limitCents: number;
 }>();
 
 const loginField = usePage().props.auth.loginField;
@@ -39,6 +46,23 @@ const action = computed(() =>
 defineOptions({
     layout: { breadcrumbs: [{ title: 'Adelantos', href: index() }] },
 });
+function employeeReview(data: FormData) {
+    return {
+        title: props.employee
+            ? 'Confirmar cambios del empleado'
+            : 'Confirmar registro del empleado',
+        description: props.employee
+            ? 'Se actualizarán los datos y el límite de adelantos del empleado.'
+            : 'Se creará una cuenta de operador con el límite indicado.',
+        amounts: [
+            reviewAmount(
+                'Límite de adelantos (USD)',
+                fieldValue(data, 'advance_limit'),
+            ),
+        ],
+        details: [fieldValue(data, 'name')],
+    };
+}
 </script>
 
 <template>
@@ -51,7 +75,12 @@ defineOptions({
             </p>
         </header>
 
-        <Form v-bind="action" v-slot="{ errors, processing }">
+        <Form
+            novalidate
+            v-bind="action"
+            v-slot="{ errors, processing }"
+            @submit.capture="reviewSubmission($event, employeeReview)"
+        >
             <FieldGroup class="gap-5">
                 <Field :data-invalid="!!errors.name">
                     <FieldLabel for="employee-name">Nombre completo</FieldLabel>
@@ -78,6 +107,15 @@ defineOptions({
                     "
                     :value="employee?.[loginField]"
                     :error="errors[loginField]"
+                />
+
+                <OpeningBalanceField
+                    id="employee-advance-limit"
+                    name="advance_limit"
+                    label="Límite máximo de adelantos (USD)"
+                    :balance-cents="limitCents"
+                    :error="errors.advance_limit"
+                    description="Es el máximo que puede quedar pendiente antes del descuento. Usa 0,00 para bloquear nuevos adelantos."
                 />
 
                 <Field :data-invalid="!!errors.password">

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Advance;
 use App\Models\Bank;
 use App\Models\BankAccount;
 use App\Models\CashClosing;
@@ -55,7 +56,8 @@ test('Administración reemplaza un egreso y conserva el movimiento original para
     $this->actingAs($admin)->get($correction)->assertInertia(fn (Assert $page) => $page
         ->component('CashMovementForm')
         ->where('replacement.id', $original->id)
-        ->where('replacement.amount', '40,00'));
+        ->where('replacement.amount', '40,00')
+        ->where('expenseCashCents', 10000));
     $this->post($replace, [...$replacement, 'void_reason' => ''])->assertSessionHasErrors('void_reason');
     $this->post($replace, [...$replacement, 'amount' => '100.01'])->assertSessionHasErrors('amount');
     $this->assertDatabaseCount('cash_movements', 1);
@@ -275,4 +277,109 @@ test('un retiro reemplazado en tránsito conserva su original solo en el grupo v
         ->has('movements.data', 1)
         ->where('movements.data.0.redacted', true)
         ->missing('movements.data.0.children'));
+});
+
+test('Administración corrige un adelanto pendiente y conserva su egreso original para auditoría', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $employee = User::factory()->create(['advance_limit_cents' => 8000]);
+    startCorrectionShift($employee);
+    CashOpening::query()->update(['opening_balance_cents' => 10000]);
+
+    $data = ['request_id' => (string) Str::uuid(), 'payment_method' => 'cash', 'amount' => '80'];
+    $this->actingAs($admin)->post(route('advances.store', $employee), $data)->assertSessionHasNoErrors();
+    $old = Advance::query()->sole();
+    $movement = CashMovement::query()->sole();
+    $correction = route('advances.correction', $old);
+    $replace = route('advances.replace', $old);
+    $payload = [...$data, 'request_id' => (string) Str::uuid(), 'amount' => '75', 'void_reason' => 'Importe incorrecto'];
+
+    $this->get(route('movements.correction', $movement))->assertForbidden();
+    $this->actingAs($employee)->get($correction)->assertRedirectToRoute('cash-closings.index');
+    $this->post($replace, $payload)->assertForbidden();
+
+    $this->actingAs($admin)->get($correction)->assertInertia(fn (Assert $page) => $page
+        ->component('AdvanceCreate')
+        ->where('replacement.amountCents', 8000)
+        ->where('pendingCents', 0)
+        ->where('cashBalanceCents', 10000));
+    $this->get(route('advances.index'))->assertInertia(fn (Assert $page) => $page
+        ->where('history.data.0.canCorrect', true));
+    $this->post($replace, [...$payload, 'void_reason' => ''])->assertSessionHasErrors('void_reason');
+    $this->post($replace, [...$payload, 'amount' => '80.01'])->assertSessionHasErrors('amount');
+    expect($movement->refresh()->voided_at)->toBeNull();
+    $this->assertDatabaseCount('advances', 1);
+
+    $this->post($replace, $payload)->assertRedirectToRoute('advances.index')->assertSessionHasNoErrors();
+    $this->post($replace, $payload)->assertSessionHasNoErrors();
+    $this->post($replace, [...$payload, 'void_reason' => 'Motivo distinto'])->assertSessionHasErrors('request_id');
+
+    $replacement = Advance::query()->pending()->sole();
+    $this->assertDatabaseCount('advances', 2);
+    expect($movement->refresh()->void_reason)->toBe('Importe incorrecto')
+        ->and($movement->voided_by)->toBe($admin->id)
+        ->and($old->refresh()->amount_cents)->toBe(8000)
+        ->and($replacement->amount_cents)->toBe(7500)
+        ->and($replacement->cashMovement?->replaces_movement_id)->toBe($movement->id)
+        ->and($replacement->cashMovement?->isSensitive())->toBeTrue();
+
+    $this->get(route('advances.index', ['status' => 'voided']))->assertInertia(fn (Assert $page) => $page
+        ->has('history.data', 1)
+        ->where('history.data.0.id', $old->id)
+        ->where('history.data.0.canCorrect', false)
+        ->where('history.data.0.cash_movement.void_reason', 'Importe incorrecto')
+        ->where('employees.0.pendingCents', 7500));
+    $this->get(route('reports.monthly', ['month' => $old->issued_on->format('Y-m'), 'report' => 'adelantos']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('advances.0.issuedCents', 7500)
+            ->where('advances.0.pendingCents', 7500)
+            ->where('advanceDetails.total', 1));
+    $this->get(route('movements.index'))->assertInertia(fn (Assert $page) => $page
+        ->where('balances.cash', 2500)
+        ->where('movements.data.0.children.0.id', $movement->id));
+
+    $this->post(route('advances.deduct', $employee), ['latest_pending_id' => $replacement->id])
+        ->assertSessionHasNoErrors();
+    expect($old->refresh()->deducted_at)->toBeNull();
+    $this->get(route('advances.correction', $replacement))->assertForbidden();
+    $this->post(route('advances.replace', $replacement), [...$payload, 'request_id' => (string) Str::uuid()])
+        ->assertSessionHasErrors(['advance' => 'El adelanto ya fue descontado.']);
+});
+
+test('la corrección bancaria reutiliza el voucher original y respeta el cierre de caja', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $employee = User::factory()->create();
+    $shift = startCorrectionShift($employee);
+    CashOpening::query()->update(['opening_balance_cents' => 1000]);
+    $account = BankAccount::factory()->create(['opening_balance_cents' => 7000]);
+    $transfer = [
+        'request_id' => (string) Str::uuid(),
+        'payment_method' => 'transfer',
+        'bank_account_id' => $account->id,
+        'voucher' => 'ADELANTO-001',
+        'amount' => '50',
+    ];
+
+    $this->actingAs($admin)->post(route('advances.store', $employee), $transfer)->assertSessionHasNoErrors();
+    $old = Advance::query()->sole();
+    $this->get(route('advances.correction', $old))->assertInertia(fn (Assert $page) => $page
+        ->where('bankAccounts.0.balanceCents', 7000)
+        ->where('replacement.voucher', 'ADELANTO-001'));
+
+    $payload = [...$transfer, 'request_id' => (string) Str::uuid(), 'amount' => '60', 'void_reason' => 'Ajuste del importe'];
+    $this->post(route('advances.replace', $old), $payload)->assertSessionHasNoErrors();
+    $replacement = Advance::query()->pending()->sole();
+    expect($old->cashMovement?->voided_voucher)->toBe('ADELANTO-001')
+        ->and($replacement->cashMovement?->voucher)->toBe('ADELANTO-001');
+
+    $this->post(route('cash-closings.store'), [
+        'request_id' => (string) Str::uuid(),
+        'cash_shift_id' => $shift->id,
+        'expected_cash_cents' => 1000,
+        'counted_cash' => '10',
+    ])->assertSessionHasNoErrors();
+
+    $this->get(route('advances.correction', $replacement))->assertForbidden();
+    $this->post(route('advances.replace', $replacement), [...$payload, 'request_id' => (string) Str::uuid()])
+        ->assertSessionHasErrors(['advance' => 'El movimiento ya está incluido en un cierre de caja.']);
+    expect($replacement->cashMovement?->voided_at)->toBeNull();
 });

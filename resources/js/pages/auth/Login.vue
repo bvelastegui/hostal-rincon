@@ -144,6 +144,7 @@ function rememberProfile(page: Page<SharedPageProps>) {
     </section>
 
     <Form
+        novalidate
         v-else
         v-bind="store.form()"
         autocomplete="off"
