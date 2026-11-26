@@ -28,6 +28,7 @@ withDefaults(
         movements: MovementRow[];
         showDate?: boolean;
         canManage?: boolean;
+        readOnly?: boolean;
     }>(),
     { canManage: true },
 );
@@ -136,7 +137,7 @@ withDefaults(
                     {{ movementStatusLabels[movement.status] }}
                 </Badge>
                 <Button
-                    v-if="canManage && movementAction(movement)"
+                    v-if="!readOnly && canManage && movementAction(movement)"
                     as-child
                     variant="outline"
                     size="sm"
@@ -147,11 +148,11 @@ withDefaults(
                     </Link>
                 </Button>
                 <CashMovementCorrectionLink
-                    v-if="!movement.redacted"
+                    v-if="!readOnly && !movement.redacted"
                     :movement="movement"
                 />
                 <CashMovementSensitivityButton
-                    v-if="!movement.redacted"
+                    v-if="!readOnly && !movement.redacted"
                     :movement="movement"
                 />
             </div>
@@ -185,6 +186,7 @@ withDefaults(
                         :movements="movement.children"
                         :show-date="showDate"
                         :can-manage="false"
+                        :read-only="readOnly"
                     />
                 </CollapsibleContent>
             </Collapsible>

@@ -6,6 +6,7 @@ use App\Actions\CalculateCashBalances;
 use App\Actions\ConfirmCashMovement;
 use App\Actions\CorrectCashMovement;
 use App\Actions\GroupCashMovementHistory;
+use App\Actions\PresentCashMovement;
 use App\Http\Requests\ConfirmCashMovementRequest;
 use App\Http\Requests\StoreCashMovementRequest;
 use App\Models\Bank;
@@ -31,9 +32,8 @@ class CashMovementController extends Controller
     public function __construct(
         private ConfirmCashMovement $confirmation,
         private CorrectCashMovement $corrections,
+        private PresentCashMovement $presentMovement,
     ) {}
-
-    private const array BANK_RELATIONS = ['voucherBank:id,name', 'bankAccount:id,bank_id,name', 'bankAccount.bank:id,name'];
 
     public function index(Request $request, CalculateCashBalances $calculateCashBalances): Response
     {
@@ -84,10 +84,10 @@ class CashMovementController extends Controller
                 ->orWhereNotNull('returned_at')->orWhereNotNull('voided_at'));
         }
 
-        $relations = $user->is_admin ? [...self::BANK_RELATIONS, 'replacement:id,replaces_movement_id'] : self::BANK_RELATIONS;
+        $relations = $user->is_admin ? [...PresentCashMovement::BANK_RELATIONS, 'replacement:id,replaces_movement_id'] : PresentCashMovement::BANK_RELATIONS;
         $records->with($relations)->latest('id');
         $lastClosing = $user->is_admin ? $this->corrections->lastClosing($shift) : null;
-        $serialize = fn (CashMovement $movement): array => $this->movementData($movement, $user,
+        $serialize = fn (CashMovement $movement): array => $this->presentMovement->handle($movement, $user,
             $user->is_admin && $this->corrections->blockedReason($movement, $shift, $lastClosing) === null);
 
         if ($user->is_admin) {
@@ -230,7 +230,7 @@ class CashMovementController extends Controller
         return Inertia::render('CashMovementForm', [
             'kind' => $movement->kind,
             'requestId' => null,
-            'movement' => $this->movementData($movement->load(self::BANK_RELATIONS), $user),
+            'movement' => $this->presentMovement->handle($movement->load(PresentCashMovement::BANK_RELATIONS), $user),
             'banks' => $movement->kind === 'deposit' ? $this->confirmation->bankAccounts() : [],
             'originBanks' => [],
             'responsibleUsers' => [],
@@ -507,54 +507,6 @@ class CashMovementController extends Controller
         if ($movement->voided_at !== null) {
             throw ValidationException::withMessages(['movement' => 'El movimiento ya está anulado.']);
         }
-    }
-
-    /** @return array<string, mixed> */
-    private function movementData(CashMovement $movement, User $user, bool $canCorrect = false): array
-    {
-        if (! $movement->detailsVisibleTo($user)) {
-            return [
-                'id' => $movement->id,
-                'redacted' => true,
-                'kind' => CashMovement::OPERATOR_KIND[$movement->kind] ?? 'transaction',
-                'recorderName' => $movement->recorder_name,
-                'date' => $movement->occurred_on,
-                'status' => $movement->status(),
-                'account' => $movement->bankAccount?->displayName() ?? ($movement->payment_method === 'cash' ? 'Efectivo' : null),
-                'amountCents' => in_array($movement->kind, ['expense', 'advance'], true)
-                    ? -$movement->amount_cents : $movement->amount_cents,
-            ];
-        }
-
-        return [
-            'id' => $movement->id,
-            'redacted' => false,
-            'isSensitive' => $movement->isSensitive(),
-            'shiftId' => $movement->cash_shift_id,
-            'kind' => $movement->kind,
-            'paymentMethod' => $movement->payment_method,
-            'amountCents' => $movement->amount_cents,
-            'description' => $movement->description,
-            'date' => $movement->occurred_on,
-            'status' => $movement->status(),
-            'originBankName' => $movement->kind === 'income' ? $movement->voucherBank?->name : null,
-            'accountBankName' => $movement->bankAccount?->bank->name,
-            'accountName' => $movement->bankAccount?->name,
-            'voucher' => $movement->voucher ?? $movement->voided_voucher,
-            'canCorrect' => $canCorrect,
-            ...($user->is_admin ? [
-                'replacesId' => $movement->replaces_movement_id,
-                'replacementId' => $movement->relationLoaded('replacement') ? $movement->replacement?->id : null,
-                'voidedBy' => $movement->voided_by_name,
-                'voidReason' => $movement->void_reason,
-                'voidedOn' => $movement->voided_at?->setTimezone('America/Guayaquil')->format('d/m/Y H:i'),
-            ] : []),
-            'responsibleName' => $movement->kind === 'deposit' ? $movement->responsible_name : null,
-            'recorderName' => $movement->recorder_name,
-            'confirmedOn' => $movement->confirmed_at?->setTimezone('America/Guayaquil')->toDateString(),
-            'confirmed' => $movement->confirmed_at !== null,
-            'returnedOn' => $movement->returned_at?->setTimezone('America/Guayaquil')->toDateString(),
-        ];
     }
 
     private function ensureMatchingRequest(CashMovement $movement, User $user, string $fingerprint): void

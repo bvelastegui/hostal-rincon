@@ -89,8 +89,12 @@ test('Administración reemplaza un egreso y conserva el movimiento original para
         ->where('movements.data.0.children.0.replacementId', $new->id)
         ->where('movements.data.0.children.0.status', 'voided')
         ->where('movements.data.0.children.0.voidReason', $replacement['void_reason']));
-    $this->get(route('reports.monthly'))->assertInertia(fn (Assert $page) => $page
-        ->has('movements', 1)->where('movements.0.confirmedCents', 7000));
+    $this->get(route('reports.monthly', ['report' => 'gastos']))->assertInertia(fn (Assert $page) => $page
+        ->has('movements', 1)
+        ->where('movements.0.confirmedCents', 7000)
+        ->where('movementDetails.total', 2)
+        ->where('movementDetails.data.1.status', 'voided')
+        ->where('movementDetails.data.1.replacementId', $new->id));
     $this->actingAs($operator)->get(route('movements.index', ['status' => 'voided']))
         ->assertInertia(fn (Assert $page) => $page->has('movements.data', 1)
             ->where('movements.data.0.id', $new->id)

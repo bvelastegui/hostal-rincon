@@ -40,6 +40,9 @@ test('el reporte usa el mes de Ecuador y muestra una apertura sin configurar', f
         ->component('MonthlyReport')
         ->where('auth.canViewMonthlyReport', true)
         ->where('month', '2026-11')
+        ->where('report', 'saldos')
+        ->where('movementDetails', null)
+        ->where('advanceDetails', null)
         ->where('balances.cash', null)
         ->where('balances.total', null)
         ->has('balances.accounts', 0)
@@ -49,6 +52,10 @@ test('el reporte usa el mes de Ecuador y muestra una apertura sin configurar', f
     $this->getJson(route('reports.monthly', ['month' => '2026-13']))
         ->assertUnprocessable()
         ->assertJsonValidationErrors('month');
+
+    $this->getJson(route('reports.monthly', ['report' => 'invalido']))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('report');
 });
 
 test('el reporte distingue cobros, gastos, depósitos y sus efectos sobre los saldos vigentes', function () {
@@ -78,7 +85,7 @@ test('el reporte distingue cobros, gastos, depósitos y sus efectos sobre los sa
     };
 
     $record(['kind' => 'income', 'payment_method' => 'cash', 'amount' => '200']);
-    $record(['kind' => 'expense', 'payment_method' => 'cash', 'amount' => '30']);
+    $expense = $record(['kind' => 'expense', 'payment_method' => 'cash', 'amount' => '30']);
     $deposit = $record(['kind' => 'deposit', 'payment_method' => 'cash', 'amount' => '150', 'responsible_id' => $employee->id]);
     $returned = $record(['kind' => 'deposit', 'payment_method' => 'cash', 'amount' => '50', 'responsible_id' => $employee->id]);
     $this->patch(route('movements.return-to-cash', $returned))->assertSessionHasNoErrors();
@@ -113,11 +120,48 @@ test('el reporte distingue cobros, gastos, depósitos y sus efectos sobre los sa
             ['kind' => 'income', 'method' => 'transfer', 'confirmedCents' => 0, 'pendingCents' => 4500, 'returnedCents' => 0],
         ]));
 
+    $this->get(route('reports.monthly', ['month' => '2026-11', 'report' => 'ingresos']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('report', 'ingresos')
+            ->has('movements', 2)
+            ->where('movements.0.kind', 'income')
+            ->where('movements.0.confirmedCents', 20000)
+            ->where('movements.1.pendingCents', 4500)
+            ->where('movementDetails.total', 2)
+            ->where('movementDetails.data.0.id', $transfer->id)
+            ->where('movementDetails.data.0.status', 'pending')
+            ->where('movementDetails.data.0.originBankName', $origin->name)
+            ->where('advanceDetails', null));
+
+    $this->get(route('reports.monthly', ['month' => '2026-11', 'report' => 'gastos']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('report', 'gastos')
+            ->has('movements', 1)
+            ->where('movements.0.kind', 'expense')
+            ->where('movements.0.confirmedCents', 3000)
+            ->where('movementDetails.total', 1)
+            ->where('movementDetails.data.0.id', $expense->id)
+            ->where('movementDetails.data.0.kind', 'expense'));
+
+    $depositsReport = route('reports.monthly', ['month' => '2026-11', 'report' => 'depositos']);
+    $this->get($depositsReport)->assertInertia(fn (Assert $page) => $page
+        ->where('movementDetails.total', 2)
+        ->where('movementDetails.data.0.id', $returned->id)
+        ->where('movementDetails.data.0.status', 'returned')
+        ->where('movementDetails.data.1.status', 'in_transit')
+        ->where('movementDetails.data.1.responsibleName', $employee->name));
+
     $this->patch(route('movements.update', $deposit), [
         'bank_account_id' => $account->id,
         'voucher' => 'DEPOSITO-01',
     ])->assertSessionHasNoErrors();
     $this->patch(route('movements.update', $transfer), ['voucher' => 'COBRO-01'])->assertSessionHasNoErrors();
+
+    $this->get($depositsReport)->assertInertia(fn (Assert $page) => $page
+        ->where('movementDetails.data.1.status', 'confirmed')
+        ->where('movementDetails.data.1.accountName', $account->name)
+        ->where('movementDetails.data.1.voucher', 'DEPOSITO-01')
+        ->where('movementDetails.data.1.confirmedOn', '2026-12-01'));
 
     $this->get($report)->assertInertia(fn (Assert $page) => $page
         ->where('movements.0.confirmedCents', 15000)
@@ -151,9 +195,16 @@ test('el reporte conserva descuentos por fecha y adelantos pendientes de otros m
     ]);
 
     $this->actingAs(User::factory()->create(['is_admin' => true]))
-        ->get(route('reports.monthly', ['month' => '2026-11']))
-        ->assertInertia(fn (Assert $page) => $page->where('advances', [
-            ['name' => 'Ana', 'issuedCents' => 7000, 'issuedCashCents' => 7000, 'issuedTransferCents' => 0, 'deductedCents' => 4000, 'pendingCents' => 9000],
-            ['name' => 'Berta', 'issuedCents' => 600, 'issuedCashCents' => 600, 'issuedTransferCents' => 0, 'deductedCents' => 0, 'pendingCents' => 600],
-        ]));
+        ->get(route('reports.monthly', ['month' => '2026-11', 'report' => 'adelantos']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('report', 'adelantos')
+            ->where('movementDetails', null)
+            ->where('advanceDetails.total', 6)
+            ->where('advanceDetails.data.0.issuedOn', '2026-12-01')
+            ->where('advanceDetails.data.0.deductedOn', null)
+            ->where('advanceDetails.data.1.deductedOn', '2026-12-01')
+            ->where('advances', [
+                ['name' => 'Ana', 'issuedCents' => 7000, 'issuedCashCents' => 7000, 'issuedTransferCents' => 0, 'deductedCents' => 4000, 'pendingCents' => 9000],
+                ['name' => 'Berta', 'issuedCents' => 600, 'issuedCashCents' => 600, 'issuedTransferCents' => 0, 'deductedCents' => 0, 'pendingCents' => 600],
+            ]));
 });

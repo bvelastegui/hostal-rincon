@@ -27,6 +27,7 @@ const props = withDefaults(
         movements: MovementRow[];
         showDate?: boolean;
         canManage?: boolean;
+        readOnly?: boolean;
     }>(),
     { canManage: true },
 );
@@ -199,11 +200,12 @@ const columns = computed<DataTableColumn<MovementRow>[]>(() => {
         );
 
     if (
-        canMarkSensitivity ||
-        props.movements.some(
-            (movement) => !movement.redacted && movement.canCorrect,
-        ) ||
-        (props.canManage && props.movements.some(movementAction))
+        !props.readOnly &&
+        (canMarkSensitivity ||
+            props.movements.some(
+                (movement) => !movement.redacted && movement.canCorrect,
+            ) ||
+            (props.canManage && props.movements.some(movementAction)))
     ) {
         visible.push({
             id: 'action',
