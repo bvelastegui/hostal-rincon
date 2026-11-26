@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/field';
 import { paymentOptions } from '@/lib/cash-movement';
 import { formatUsd, parseUsdCents } from '@/lib/money';
+import { reviewAmount, reviewSubmission } from '@/lib/record-confirmation';
 
 const props = defineProps<{
     employee: { id: number; name: string };
@@ -107,7 +108,7 @@ const limitError = computed(() => {
 
     return 'El monto supera el cupo disponible del empleado.';
 });
-const amountError = computed(() => limitError.value ?? form.errors.amount);
+const amountError = computed(() => form.errors.amount ?? limitError.value);
 watch([() => form.payment_method, () => form.bank_account_id], () =>
     form.clearErrors('amount'),
 );
@@ -117,9 +118,6 @@ const submitLabel = computed(() => {
         : 'Registrar adelanto';
     return amountLabel.value ? action + ' · ' + amountLabel.value : action;
 });
-const cannotSubmit = computed(
-    () => form.processing || maximum.value === 0 || limitError.value !== null,
-);
 const page = usePage();
 const submitError = computed(
     () =>
@@ -128,8 +126,45 @@ const submitError = computed(
         form.errors.request_id,
 );
 
+function advanceReview() {
+    const bank = props.bankAccounts.find(
+        ({ id }) => String(id) === form.bank_account_id,
+    );
+    return {
+        title: props.replacement
+            ? 'Confirmar corrección de adelanto'
+            : 'Confirmar adelanto de sueldo',
+        description: props.replacement
+            ? 'Se anulará el adelanto original y se registrará la corrección para ' +
+              props.employee.name +
+              '.'
+            : 'El adelanto de ' +
+              props.employee.name +
+              ' quedará pendiente de descuento.',
+        amounts: [
+            ...(originalAmount == null
+                ? []
+                : [reviewAmount('Monto original (USD)', originalAmount)]),
+            reviewAmount(
+                props.replacement
+                    ? 'Monto nuevo (USD)'
+                    : 'Monto del adelanto (USD)',
+                form.amount,
+            ),
+        ],
+        details: [
+            paymentOptions.find(
+                (option) => option.value === form.payment_method,
+            )?.label,
+            isTransfer.value && bank
+                ? 'Cuenta de origen · ' + bank.name
+                : undefined,
+        ],
+    };
+}
+
 function submit(): void {
-    if (cannotSubmit.value) {
+    if (form.processing) {
         return;
     }
 
@@ -194,8 +229,10 @@ function submit(): void {
         </dl>
 
         <form
+            novalidate
             v-if="employeeCapacity"
             class="flex flex-1 flex-col gap-5"
+            @submit.capture="reviewSubmission($event, advanceReview)"
             @submit.prevent="submit"
         >
             <FieldGroup class="gap-5">
@@ -338,7 +375,11 @@ function submit(): void {
                 <Button as-child variant="outline" class="min-h-11">
                     <Link :href="index()">Cancelar</Link>
                 </Button>
-                <Button type="submit" class="min-h-11" :disabled="cannotSubmit">
+                <Button
+                    type="submit"
+                    class="min-h-11"
+                    :disabled="form.processing"
+                >
                     {{ form.processing ? 'Guardando…' : submitLabel }}
                 </Button>
             </div>

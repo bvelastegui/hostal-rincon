@@ -6,6 +6,7 @@ import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { reviewSubmission } from '@/lib/record-confirmation';
 import { edit } from '@/routes/security';
 
 // oxfmt-ignore
@@ -38,7 +39,15 @@ defineOptions({
         />
 
         <Form
+            novalidate
             v-bind="SecurityController.update.form()"
+            @submit.capture="
+                reviewSubmission($event, {
+                    title: 'Confirmar cambio de contraseña',
+                    description:
+                        'Usarás la nueva contraseña la próxima vez que inicies sesión.',
+                })
+            "
             autocomplete="off"
             :options="{
                 preserveScroll: true,

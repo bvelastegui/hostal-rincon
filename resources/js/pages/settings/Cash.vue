@@ -7,6 +7,11 @@ import SettingsSection from '@/components/SettingsSection.vue';
 import { Button } from '@/components/ui/button';
 import { FieldGroup } from '@/components/ui/field';
 import { formatUsd } from '@/lib/money';
+import {
+    fieldValue,
+    reviewAmount,
+    reviewSubmission,
+} from '@/lib/record-confirmation';
 import { edit } from '@/routes/cash-settings';
 
 defineProps<{
@@ -37,10 +42,24 @@ defineOptions({
                 </span>
             </p>
             <Form
+                novalidate
                 v-else
                 v-bind="updateOpening.form()"
                 v-slot="{ errors, processing }"
                 error-bag="cashOpening"
+                @submit.capture="
+                    reviewSubmission($event, (data) => ({
+                        title: 'Confirmar saldo inicial de caja',
+                        description:
+                            'Este valor se usará como base para calcular el efectivo disponible.',
+                        amounts: [
+                            reviewAmount(
+                                'Efectivo inicial (USD)',
+                                fieldValue(data, 'opening_balance'),
+                            ),
+                        ],
+                    }))
+                "
             >
                 <FieldGroup
                     class="settings-form-row gap-3 lg:grid lg:max-w-xl lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-y-0"

@@ -8,6 +8,11 @@ use Illuminate\Support\Facades\Gate;
 
 class StoreCashMovementRequest extends ConfirmCashMovementRequest
 {
+    public function authorize(): bool
+    {
+        return $this->routeIs('movements.store') || parent::authorize();
+    }
+
     protected function prepareForValidation(): void
     {
         parent::prepareForValidation();

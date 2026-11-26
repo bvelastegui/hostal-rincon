@@ -27,9 +27,10 @@ const props = withDefaults(
         movements: MovementRow[];
         showDate?: boolean;
         canManage?: boolean;
+        canManageDeposits?: boolean;
         readOnly?: boolean;
     }>(),
-    { canManage: true },
+    { canManage: true, canManageDeposits: false },
 );
 
 const page = usePage();
@@ -205,7 +206,10 @@ const columns = computed<DataTableColumn<MovementRow>[]>(() => {
             props.movements.some(
                 (movement) => !movement.redacted && movement.canCorrect,
             ) ||
-            (props.canManage && props.movements.some(movementAction)))
+            (props.canManage &&
+                props.movements.some((movement) =>
+                    movementAction(movement, props.canManageDeposits),
+                )))
     ) {
         visible.push({
             id: 'action',
@@ -217,7 +221,9 @@ const columns = computed<DataTableColumn<MovementRow>[]>(() => {
                     return null;
                 }
 
-                const label = props.canManage ? movementAction(movement) : null;
+                const label = props.canManage
+                    ? movementAction(movement, props.canManageDeposits)
+                    : null;
                 return h('div', { class: 'flex flex-wrap justify-end gap-2' }, [
                     label
                         ? h(

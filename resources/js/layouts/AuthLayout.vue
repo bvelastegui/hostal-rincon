@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RecordConfirmationDialog from '@/components/RecordConfirmationDialog.vue';
 import AuthLayout from '@/layouts/auth/AuthSimpleLayout.vue';
 
 const {
@@ -15,5 +16,6 @@ const {
 <template>
     <AuthLayout :title="title" :description="description" :wide="wide">
         <slot />
+        <RecordConfirmationDialog />
     </AuthLayout>
 </template>

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { Form, Head, Link, useHttp, usePage } from '@inertiajs/vue3';
+import { createReusableTemplate } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';
 import CashMovementVoidReason from '@/components/CashMovementVoidReason.vue';
 import HighlightedAmountField from '@/components/HighlightedAmountField.vue';
+import RecordAmounts from '@/components/RecordAmounts.vue';
 import SelectField from '@/components/SelectField.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -25,8 +27,13 @@ import {
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { paymentOptions } from '@/lib/cash-movement';
+import { movementLabels, paymentOptions } from '@/lib/cash-movement';
 import { formatUsd, parseUsdCents } from '@/lib/money';
+import {
+    fieldValue,
+    reviewAmount,
+    reviewSubmission,
+} from '@/lib/record-confirmation';
 import {
     annul,
     checkBankFunds,
@@ -64,6 +71,7 @@ const props = defineProps<{
     banks: { id: number; name: string; balanceCents?: number }[];
     originBanks: { id: number; name: string }[];
     responsibleUsers: { id: number; name: string }[];
+    defaultResponsibleId?: number | null;
 }>();
 
 defineOptions({
@@ -72,10 +80,15 @@ defineOptions({
 
 const page = usePage();
 const amount = ref(props.replacement?.amount ?? '');
-const method = ref<string>(props.replacement?.paymentMethod ?? 'cash');
+const method = ref<string>(
+    props.replacement?.paymentMethod ??
+        (props.kind === 'expense' ? '' : 'cash'),
+);
 const accountId = ref(props.replacement?.accountId?.toString() ?? '');
 const isDeposit = computed(() => props.kind === 'deposit');
 const isExpense = computed(() => props.kind === 'expense');
+const [DefinePaymentMethod, PaymentMethodField] = createReusableTemplate();
+const [DefineAccount, AccountField] = createReusableTemplate();
 const isTransfer = computed(
     () => (props.movement?.paymentMethod ?? method.value) === 'transfer',
 );
@@ -98,7 +111,7 @@ const selectedBank = computed(() =>
     props.banks.find((bank) => String(bank.id) === accountId.value),
 );
 const availableCents = computed(() => {
-    if (!needsFunds.value) {
+    if (!needsFunds.value || (isExpense.value && !method.value)) {
         return null;
     }
 
@@ -194,14 +207,10 @@ const fundsError = computed(() => {
         isExpense.value && isTransfer.value ? 'la cuenta seleccionada' : 'caja';
     return 'El monto supera el saldo disponible en ' + source + '.';
 });
-const amountBlocked = computed(
-    () =>
-        needsFunds.value &&
-        (!!fundsError.value ||
-            checkingBankFunds.value ||
-            (availableCents.value === null && !requiresBankCheck.value)),
-);
 const fundsHint = computed(() => {
+    if (isExpense.value && !method.value) {
+        return 'Selecciona la forma de pago para comprobar la disponibilidad.';
+    }
     if (!(isExpense.value && isTransfer.value)) {
         return 'Configura el saldo inicial de efectivo para registrar este movimiento.';
     }
@@ -280,6 +289,74 @@ const userOptions = computed(() =>
         label: name,
     })),
 );
+function movementReview(data: FormData) {
+    const kind = props.kind;
+    const transfer = isTransfer.value;
+    const confirms =
+        !!props.movement ||
+        confirmedDepositReplacement.value ||
+        (kind === 'income' &&
+            (!transfer || fieldValue(data, 'confirm') === '1'));
+    const bank = props.banks.find(
+        ({ id }) => String(id) === fieldValue(data, 'bank_account_id'),
+    );
+    const origin = props.originBanks.find(
+        ({ id }) => String(id) === fieldValue(data, 'origin_bank_id'),
+    );
+    const responsible = props.responsibleUsers.find(
+        ({ id }) => String(id) === fieldValue(data, 'responsible_id'),
+    );
+    const voucher = fieldValue(data, 'voucher');
+    const paymentMethod = props.movement?.paymentMethod ?? method.value;
+    const descriptions = {
+        income: confirms
+            ? 'El ingreso se acreditará en el saldo correspondiente.'
+            : 'El ingreso quedará pendiente y se acreditará cuando se confirme.',
+        expense: 'El monto se descontará del saldo de origen.',
+        deposit: confirms
+            ? 'El monto se acreditará en la cuenta bancaria de destino.'
+            : 'El efectivo saldrá de caja y quedará en tránsito hasta confirmar el depósito.',
+    };
+    const movement = movementLabels[kind].toLowerCase();
+    return {
+        title: props.replacement
+            ? 'Confirmar corrección de ' + movement
+            : props.movement
+              ? 'Confirmar ' + movement
+              : 'Registrar ' + movement,
+        description:
+            (props.replacement ? 'Se anulará el registro original. ' : '') +
+            descriptions[kind],
+        amounts: [
+            ...(props.replacement
+                ? [
+                      reviewAmount(
+                          'Monto original (USD)',
+                          props.replacement.amount,
+                      ),
+                  ]
+                : []),
+            reviewAmount(
+                props.replacement ? 'Monto nuevo (USD)' : 'Monto (USD)',
+                props.movement?.amountCents ?? fieldValue(data, 'amount'),
+            ),
+        ],
+        details: [
+            !isDeposit.value
+                ? paymentOptions.find(
+                      (option) => option.value === paymentMethod,
+                  )?.label
+                : undefined,
+            origin && 'Banco de origen · ' + origin.name,
+            bank &&
+                (isExpense.value
+                    ? 'Cuenta de origen · '
+                    : 'Cuenta de destino · ') + bank.name,
+            responsible && 'Efectivo a cargo de ' + responsible.name,
+            voucher && 'Voucher · ' + voucher,
+        ],
+    };
+}
 </script>
 
 <template>
@@ -349,15 +426,67 @@ const userOptions = computed(() =>
         </dl>
 
         <Form
+            novalidate
             v-bind="action"
             v-slot="{ errors, processing, clearErrors }"
-            :on-before="() => !amountBlocked"
             error-bag="movementForm"
+            @submit.capture="reviewSubmission($event, movementReview)"
         >
+            <DefinePaymentMethod>
+                <SelectField
+                    v-model="method"
+                    name="payment_method"
+                    :label="
+                        isExpense ? 'Forma de pago del egreso' : 'Forma de pago'
+                    "
+                    :placeholder="
+                        isExpense
+                            ? 'Selecciona el origen del dinero'
+                            : 'Selecciona la forma de pago'
+                    "
+                    :options="paymentOptions"
+                    :error="errors.payment_method"
+                    @update:model-value="clearErrors('amount')"
+                />
+            </DefinePaymentMethod>
+            <DefineAccount>
+                <SelectField
+                    v-if="selectAccount && banks.length"
+                    v-model="accountId"
+                    name="bank_account_id"
+                    :label="
+                        isExpense ? 'Cuenta de origen' : 'Cuenta de destino'
+                    "
+                    placeholder="Selecciona la cuenta bancaria"
+                    :options="bankOptions"
+                    :error="errors.bank_account_id"
+                    @update:model-value="clearErrors('amount')"
+                />
+                <p
+                    v-else-if="selectAccount"
+                    class="text-sm text-muted-foreground"
+                >
+                    La administradora debe registrar una cuenta de un banco
+                    activo.
+                </p>
+                <FieldError
+                    v-if="
+                        selectAccount && !banks.length && errors.bank_account_id
+                    "
+                >
+                    {{ errors.bank_account_id }}
+                </FieldError>
+            </DefineAccount>
+
             <FieldGroup class="gap-4">
                 <template v-if="!movement">
                     <input type="hidden" name="request_id" :value="requestId" />
                     <input type="hidden" name="kind" :value="kind" />
+
+                    <template v-if="isExpense">
+                        <PaymentMethodField />
+                        <AccountField />
+                    </template>
 
                     <HighlightedAmountField
                         id="amount"
@@ -370,7 +499,7 @@ const userOptions = computed(() =>
                                 deposit: 'Monto del depósito',
                             }[kind]
                         "
-                        :error="fundsError ?? errors.amount"
+                        :error="errors.amount ?? fundsError"
                         :alert-error="!!fundsError"
                         @update:model-value="clearErrors('amount')"
                     >
@@ -458,30 +587,18 @@ const userOptions = computed(() =>
                     <SelectField
                         v-if="isDeposit"
                         name="responsible_id"
-                        label="Responsable del efectivo"
+                        label="Custodio del depósito"
                         placeholder="Selecciona a la persona que recibe el efectivo"
                         :options="userOptions"
-                        :default-value="replacement?.responsibleId?.toString()"
+                        :default-value="
+                            (
+                                replacement?.responsibleId ??
+                                defaultResponsibleId
+                            )?.toString()
+                        "
                         :error="errors.responsible_id"
                     />
-                    <SelectField
-                        v-else
-                        v-model="method"
-                        name="payment_method"
-                        :label="
-                            isExpense
-                                ? 'Forma de pago del egreso'
-                                : 'Forma de pago'
-                        "
-                        :placeholder="
-                            isExpense
-                                ? 'Selecciona el origen del dinero'
-                                : 'Selecciona la forma de pago'
-                        "
-                        :options="paymentOptions"
-                        :error="errors.payment_method"
-                        @update:model-value="clearErrors('amount')"
-                    />
+                    <PaymentMethodField v-else-if="!isExpense" />
                 </template>
 
                 <SelectField
@@ -499,25 +616,11 @@ const userOptions = computed(() =>
                     :error="errors.origin_bank_id"
                 />
 
-                <SelectField
-                    v-if="selectAccount && banks.length"
-                    v-model="accountId"
-                    name="bank_account_id"
-                    :label="
-                        isExpense ? 'Cuenta de origen' : 'Cuenta de destino'
-                    "
-                    placeholder="Selecciona la cuenta bancaria"
-                    :options="bankOptions"
-                    :error="errors.bank_account_id"
-                    @update:model-value="clearErrors('amount')"
-                />
-                <p
-                    v-else-if="selectAccount"
-                    class="text-sm text-muted-foreground"
-                >
-                    La administradora debe registrar una cuenta de un banco
-                    activo.
-                </p>
+                <FieldError v-else-if="errors.origin_bank_id">
+                    {{ errors.origin_bank_id }}
+                </FieldError>
+
+                <AccountField v-if="!isExpense" />
 
                 <Field
                     v-if="
@@ -581,11 +684,7 @@ const userOptions = computed(() =>
                         :name="canConfirmOnSave ? 'confirm' : undefined"
                         :value="preferConfirmation ? '1' : '0'"
                         class="min-h-11 w-full sm:w-auto"
-                        :disabled="
-                            processing ||
-                            amountBlocked ||
-                            (selectAccount && !banks.length)
-                        "
+                        :disabled="processing"
                     >
                         {{ submitLabel }}
                     </Button>
@@ -596,7 +695,7 @@ const userOptions = computed(() =>
                         :value="preferConfirmation ? '0' : '1'"
                         variant="secondary"
                         class="min-h-11 w-full sm:w-auto"
-                        :disabled="processing || !banks.length"
+                        :disabled="processing"
                     >
                         {{
                             preferConfirmation
@@ -636,7 +735,16 @@ const userOptions = computed(() =>
                         importe dejará de contar en el saldo.
                     </DialogDescription>
                 </DialogHeader>
+                <RecordAmounts
+                    :amounts="[
+                        reviewAmount(
+                            'Monto a anular (USD)',
+                            replacement.amount,
+                        ),
+                    ]"
+                />
                 <Form
+                    novalidate
                     v-bind="annul.form(replacement.id)"
                     v-slot="{ errors, processing }"
                     error-bag="annulMovement"
@@ -675,9 +783,24 @@ const userOptions = computed(() =>
         <template v-if="movement && isDeposit">
             <Separator />
             <Form
+                novalidate
                 v-bind="returnToCash.form(movement.id)"
                 v-slot="{ errors, processing }"
                 error-bag="returnDeposit"
+                @submit.capture="
+                    reviewSubmission($event, {
+                        title: 'Confirmar devolución a caja',
+                        description:
+                            'El dinero saldrá de tránsito y volverá al saldo de efectivo.',
+                        amounts: [
+                            reviewAmount(
+                                'Efectivo devuelto (USD)',
+                                movement.amountCents,
+                            ),
+                        ],
+                        confirmLabel: 'Confirmar devolución',
+                    })
+                "
                 class="flex flex-col items-start gap-2"
             >
                 <p class="text-sm text-muted-foreground">

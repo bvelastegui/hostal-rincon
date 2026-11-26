@@ -57,7 +57,11 @@ function apply(month: string): void {
             </Button>
         </PopoverTrigger>
         <PopoverContent align="start" aria-label="Mes calendario">
-            <form class="flex flex-col gap-3" @submit.prevent="apply(value)">
+            <form
+                novalidate
+                class="flex flex-col gap-3"
+                @submit.prevent="apply(value)"
+            >
                 <Field>
                     <FieldLabel :for="id">Mes calendario</FieldLabel>
                     <Input

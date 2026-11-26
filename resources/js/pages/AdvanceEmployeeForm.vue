@@ -17,6 +17,11 @@ import {
     FieldLabel,
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import {
+    fieldValue,
+    reviewAmount,
+    reviewSubmission,
+} from '@/lib/record-confirmation';
 
 const props = defineProps<{
     employee: {
@@ -41,6 +46,23 @@ const action = computed(() =>
 defineOptions({
     layout: { breadcrumbs: [{ title: 'Adelantos', href: index() }] },
 });
+function employeeReview(data: FormData) {
+    return {
+        title: props.employee
+            ? 'Confirmar cambios del empleado'
+            : 'Confirmar registro del empleado',
+        description: props.employee
+            ? 'Se actualizarán los datos y el límite de adelantos del empleado.'
+            : 'Se creará una cuenta de operador con el límite indicado.',
+        amounts: [
+            reviewAmount(
+                'Límite de adelantos (USD)',
+                fieldValue(data, 'advance_limit'),
+            ),
+        ],
+        details: [fieldValue(data, 'name')],
+    };
+}
 </script>
 
 <template>
@@ -53,7 +75,12 @@ defineOptions({
             </p>
         </header>
 
-        <Form v-bind="action" v-slot="{ errors, processing }">
+        <Form
+            novalidate
+            v-bind="action"
+            v-slot="{ errors, processing }"
+            @submit.capture="reviewSubmission($event, employeeReview)"
+        >
             <FieldGroup class="gap-5">
                 <Field :data-invalid="!!errors.name">
                     <FieldLabel for="employee-name">Nombre completo</FieldLabel>

@@ -15,6 +15,7 @@ import DataTableFilter from '@/components/DataTableFilter.vue';
 import DataTableMonth from '@/components/DataTableMonth.vue';
 import DataTablePagination from '@/components/DataTablePagination.vue';
 import InputError from '@/components/InputError.vue';
+import RecordAmounts from '@/components/RecordAmounts.vue';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,7 @@ import {
 } from '@/components/ui/dialog';
 import { paymentOptions } from '@/lib/cash-movement';
 import { formatUsd } from '@/lib/money';
+import { reviewAmount } from '@/lib/record-confirmation';
 import type { DataTableColumn, DataTablePage } from '@/types/data-table';
 
 type Employee = {
@@ -584,11 +586,22 @@ function confirmDeduction(): void {
                 <DialogHeader>
                     <DialogTitle>Confirmar descuento completo</DialogTitle>
                     <DialogDescription>
-                        {{ selectedEmployee.name }} · Pendiente
-                        {{ formatUsd(selectedEmployee.pendingCents) }}
+                        {{ selectedEmployee.name }}
                     </DialogDescription>
                 </DialogHeader>
-                <form class="grid gap-4" @submit.prevent="confirmDeduction">
+                <form
+                    novalidate
+                    class="grid gap-4"
+                    @submit.prevent="confirmDeduction"
+                >
+                    <RecordAmounts
+                        :amounts="[
+                            reviewAmount(
+                                'Descuento completo (USD)',
+                                selectedEmployee.pendingCents,
+                            ),
+                        ]"
+                    />
                     <p class="text-sm">
                         Confirma que este importe ya se descontó del sueldo. Se
                         marcarán todos los adelantos pendientes, se conservará

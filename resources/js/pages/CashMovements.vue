@@ -71,11 +71,9 @@ const filterFields = computed(() => [
             { value: all, label: 'Todos los tipos' },
             { value: 'income', label: movementLabels.income },
             { value: 'expense', label: movementLabels.expense },
+            { value: 'deposit', label: 'Depósito' },
             ...(props.canManageDeposits
-                ? [
-                      { value: 'deposit', label: 'Depósito' },
-                      { value: 'advance', label: 'Adelanto' },
-                  ]
+                ? [{ value: 'advance', label: 'Adelanto' }]
                 : [
                       {
                           value: 'transaction',
@@ -173,14 +171,10 @@ const balances = computed(() => [
         >
             <h1 class="text-2xl font-semibold tracking-tight">Movimientos</h1>
             <div
-                class="grid grid-cols-2 gap-2"
-                :class="{ 'sm:grid-cols-3': canManageDeposits }"
+                v-if="!movementRestriction"
+                class="grid grid-cols-2 gap-2 sm:grid-cols-3"
             >
-                <Button
-                    v-if="!movementRestriction"
-                    as-child
-                    class="min-h-11 px-2 sm:px-4"
-                >
+                <Button as-child class="min-h-11 px-2 sm:px-4">
                     <Link :href="create({ query: { kind: 'income' } })">
                         <ArrowDownLeft
                             data-icon="inline-start"
@@ -190,7 +184,6 @@ const balances = computed(() => [
                     </Link>
                 </Button>
                 <Button
-                    v-if="!movementRestriction"
                     as-child
                     variant="outline"
                     class="min-h-11 px-2 sm:px-4"
@@ -206,8 +199,7 @@ const balances = computed(() => [
                 <Button
                     as-child
                     variant="outline"
-                    v-if="canManageDeposits"
-                    class="min-h-11 px-2 sm:px-4"
+                    class="col-span-2 min-h-11 px-2 sm:col-span-1 sm:px-4"
                 >
                     <Link :href="create({ query: { kind: 'deposit' } })">
                         <Landmark data-icon="inline-start" aria-hidden="true" />
@@ -308,12 +300,14 @@ const balances = computed(() => [
             <CashMovementList
                 class="lg:hidden"
                 :movements="depositsInTransit.data"
+                :can-manage-deposits="canManageDeposits"
                 show-date
             />
             <div class="hidden lg:block">
                 <CashMovementsTable
                     caption="Depósitos en tránsito"
                     :movements="depositsInTransit.data"
+                    :can-manage-deposits="canManageDeposits"
                     show-date
                 />
             </div>
@@ -346,6 +340,7 @@ const balances = computed(() => [
                     :movements="movements.data"
                     :show-date="date === null || multipleDates"
                     :can-manage="!movementRestriction"
+                    :can-manage-deposits="canManageDeposits"
                 />
                 <div class="hidden lg:block">
                     <CashMovementsTable
@@ -357,6 +352,7 @@ const balances = computed(() => [
                         :movements="movements.data"
                         :show-date="date === null || multipleDates"
                         :can-manage="!movementRestriction"
+                        :can-manage-deposits="canManageDeposits"
                     />
                 </div>
             </template>

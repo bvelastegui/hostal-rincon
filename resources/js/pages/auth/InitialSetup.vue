@@ -19,6 +19,11 @@ import {
     FieldSet,
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import {
+    fieldValue,
+    reviewAmount,
+    reviewSubmission,
+} from '@/lib/record-confirmation';
 import { restore, store } from '@/routes/initial-setup';
 
 defineProps<{ employeeAdvanceLimitCents: number }>();
@@ -108,6 +113,59 @@ const stepValidation = {
         'accounts.*.opening_balance',
     ],
 };
+
+function setupReview(data: FormData) {
+    if (step.value !== 'employees') {
+        return null;
+    }
+
+    return {
+        title: 'Confirmar configuración inicial',
+        description:
+            'Se creará la cuenta administradora y se guardarán los saldos y empleados ingresados.',
+        amounts: [
+            reviewAmount(
+                'Efectivo inicial (USD)',
+                fieldValue(data, 'opening_balance'),
+            ),
+            ...accounts.value.map((_, index) => {
+                const name = fieldValue(data, 'accounts[' + index + '][name]');
+                return reviewAmount(
+                    'Saldo de cuenta ' +
+                        (index + 1) +
+                        (name ? ' · ' + name : '') +
+                        ' (USD)',
+                    fieldValue(
+                        data,
+                        'accounts[' + index + '][opening_balance]',
+                    ),
+                );
+            }),
+            ...employees.value.map((_, index) => {
+                const name = fieldValue(data, 'employees[' + index + '][name]');
+                return reviewAmount(
+                    'Límite de empleado ' +
+                        (index + 1) +
+                        (name ? ' · ' + name : '') +
+                        ' (USD)',
+                    fieldValue(data, 'employees[' + index + '][advance_limit]'),
+                );
+            }),
+        ],
+        confirmLabel: 'Guardar configuración',
+    };
+}
+
+function restoreReview(data: FormData) {
+    const file = data.get('backup');
+    return {
+        title: 'Confirmar restauración del respaldo',
+        description:
+            'Se recuperarán los usuarios, saldos e historial del respaldo seleccionado.',
+        details: [file instanceof File ? file.name : undefined],
+        confirmLabel: 'Restaurar respaldo',
+    };
+}
 
 function nextOrSubmit() {
     const current = step.value;
@@ -206,6 +264,7 @@ function showStepWithErrors(errors: Errors) {
         v-bind="store.form()"
         v-slot="{ errors, processing, validating, clearErrors }"
         :on-before="nextOrSubmit"
+        @submit.capture="reviewSubmission($event, setupReview)"
         @error="showStepWithErrors"
         autocomplete="off"
         novalidate
@@ -405,6 +464,7 @@ function showStepWithErrors(errors: Errors) {
     <Form
         v-if="step === 'backup'"
         v-bind="restore.form()"
+        @submit.capture="reviewSubmission($event, restoreReview)"
         v-slot="{ errors, processing }"
         novalidate
         disable-while-processing
