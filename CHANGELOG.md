@@ -4,6 +4,10 @@ El proyecto usa versionamiento semántico (`MAJOR.MINOR.PATCH`). Incrementa `MAJ
 
 Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la fecha en formato `AAAA-MM-DD` y etiqueta el commit de la entrega con `vMAJOR.MINOR.PATCH`.
 
+## 0.10.2 (prevista)
+
+- La barra de escritorio muestra accesos directos a **Ajustes** y **Cambiar de sesión**, según los permisos de la cuenta activa.
+
 ## 0.10.1 (prevista)
 
 - En **Movimientos**, el operador ve el efectivo y el neto de las transferencias confirmadas que registró en su turno. Administración conserva el saldo bancario y el total general.

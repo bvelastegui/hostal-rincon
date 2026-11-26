@@ -1,27 +1,24 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
+import { LogOut, Settings } from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import LogoutLink from '@/components/LogoutLink.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
     NavigationMenu,
     NavigationMenuItem,
     NavigationMenuList,
     navigationMenuTriggerStyle,
 } from '@/components/ui/navigation-menu';
-import UserMenuContent from '@/components/UserMenuContent.vue';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
 import { useMainNavigation } from '@/composables/useMainNavigation';
 import { dashboard } from '@/routes';
 import { index as cashShift } from '@/routes/cash-closings';
+import { edit as editProfile } from '@/routes/profile';
 import type { BreadcrumbItem } from '@/types';
 
 type Props = {
@@ -35,6 +32,7 @@ const props = withDefaults(defineProps<Props>(), {
 const page = usePage();
 const auth = computed(() => page.props.auth);
 const { isCurrentOrParentUrl } = useCurrentUrl();
+const settingsActive = computed(() => isCurrentOrParentUrl('/settings/'));
 
 const activeItemStyles = 'bg-accent text-accent-foreground';
 
@@ -44,18 +42,25 @@ const mainNavItems = useMainNavigation();
 <template>
     <div class="hidden lg:block">
         <div class="border-b border-sidebar-border/80">
-            <div class="app-container flex h-16 items-center">
+            <div
+                class="app-container grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 min-[75rem]:grid-cols-[auto_minmax(0,1fr)_auto] xl:gap-x-6"
+            >
                 <Link
                     :href="auth.cashShiftAccess ? cashShift() : dashboard()"
-                    class="flex items-center gap-x-2"
+                    class="col-start-1 row-start-1 flex h-14 items-center gap-2 justify-self-start min-[75rem]:h-16"
                 >
                     <AppLogo />
                 </Link>
 
-                <div class="flex h-full flex-1">
-                    <NavigationMenu class="ml-10 flex h-full items-stretch">
+                <div
+                    class="col-span-2 col-start-1 row-start-2 flex h-11 min-w-0 min-[75rem]:col-span-1 min-[75rem]:col-start-2 min-[75rem]:row-start-1 min-[75rem]:h-16"
+                >
+                    <NavigationMenu
+                        aria-label="Menú principal"
+                        class="flex h-full items-stretch"
+                    >
                         <NavigationMenuList
-                            class="flex h-full items-stretch space-x-2"
+                            class="flex h-full items-stretch gap-1"
                         >
                             <NavigationMenuItem
                                 v-for="item in mainNavItems"
@@ -70,11 +75,17 @@ const mainNavItems = useMainNavigation();
                                         'h-9 cursor-pointer px-3',
                                     ]"
                                     :href="item.href"
+                                    :aria-current="
+                                        isCurrentOrParentUrl(item.href)
+                                            ? 'location'
+                                            : undefined
+                                    "
                                 >
                                     <component
                                         v-if="item.icon"
                                         :is="item.icon"
-                                        class="mr-2 h-4 w-4"
+                                        class="mr-2 size-4"
+                                        aria-hidden="true"
                                     />
                                     {{ item.title }}
                                 </Link>
@@ -87,35 +98,60 @@ const mainNavItems = useMainNavigation();
                     </NavigationMenu>
                 </div>
 
-                <div class="ml-auto shrink-0">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger :as-child="true">
-                            <Button
-                                variant="ghost"
-                                size="icon-lg"
-                                aria-label="Menú de usuario"
-                                class="size-11 rounded-full p-1"
+                <div
+                    class="col-start-2 row-start-1 flex items-center gap-2 min-[75rem]:col-start-3"
+                >
+                    <div
+                        class="flex items-center gap-2 pe-1"
+                        :title="auth.user.name"
+                    >
+                        <Avatar class="size-8" aria-hidden="true">
+                            <AvatarImage
+                                v-if="auth.user.avatar"
+                                :src="auth.user.avatar"
+                                alt=""
+                            />
+                            <AvatarFallback class="font-semibold">
+                                {{ getInitials(auth.user.name) }}
+                            </AvatarFallback>
+                        </Avatar>
+                        <span class="sr-only xl:not-sr-only">
+                            <span
+                                class="block max-w-28 truncate text-sm font-medium"
                             >
-                                <Avatar
-                                    class="size-8 overflow-hidden rounded-full"
-                                >
-                                    <AvatarImage
-                                        v-if="auth.user.avatar"
-                                        :src="auth.user.avatar"
-                                        :alt="auth.user.name"
-                                    />
-                                    <AvatarFallback
-                                        class="rounded-lg bg-secondary font-semibold text-secondary-foreground"
-                                    >
-                                        {{ getInitials(auth.user?.name) }}
-                                    </AvatarFallback>
-                                </Avatar>
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" class="w-56">
-                            <UserMenuContent :user="auth.user" />
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                                {{ auth.user.name }}
+                            </span>
+                        </span>
+                    </div>
+
+                    <Button
+                        v-if="!auth.cashShiftAccess"
+                        as-child
+                        :variant="settingsActive ? 'secondary' : 'ghost'"
+                    >
+                        <Link
+                            :href="editProfile()"
+                            :aria-current="
+                                settingsActive ? 'location' : undefined
+                            "
+                        >
+                            <Settings
+                                data-icon="inline-start"
+                                aria-hidden="true"
+                            />
+                            Ajustes
+                        </Link>
+                    </Button>
+
+                    <Button as-child variant="outline">
+                        <LogoutLink data-test="logout-button">
+                            <LogOut
+                                data-icon="inline-start"
+                                aria-hidden="true"
+                            />
+                            Cambiar de sesión
+                        </LogoutLink>
+                    </Button>
                 </div>
             </div>
         </div>
