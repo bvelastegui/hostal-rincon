@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import type { Page, SharedPageProps } from '@inertiajs/core';
-import { Form, Head } from '@inertiajs/vue3';
+import { Form, Head, usePage } from '@inertiajs/vue3';
 import { UserRound, X } from '@lucide/vue';
 import { computed, nextTick, onMounted, ref, useTemplateRef } from 'vue';
+import AccountIdentifierField from '@/components/AccountIdentifierField.vue';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import {
@@ -31,6 +31,7 @@ defineProps<{
     canResetPassword: boolean;
 }>();
 
+const loginField = usePage().props.auth.loginField;
 const profiles = ref<SavedLoginProfile[]>([]);
 const selected = ref<SavedLoginProfile | null>(null);
 const manual = ref(false);
@@ -42,12 +43,13 @@ const choosing = computed(
 );
 
 onMounted(() => {
-    profiles.value = loadSavedProfiles();
+    profiles.value = loadSavedProfiles(loginField);
 });
 
-function removeProfile(email: string) {
+function removeProfile(identifier: string) {
     profiles.value = storeSavedProfiles(
-        profiles.value.filter((profile) => profile.email !== email),
+        loginField,
+        profiles.value.filter((profile) => profile.identifier !== identifier),
     );
 }
 
@@ -67,10 +69,13 @@ function switchAccount(showManual: boolean) {
 
 function rememberProfile(page: Page<SharedPageProps>) {
     const user = page.props.auth?.user;
-    if (user && (saveHere.value || selected.value?.email === user.email)) {
-        profiles.value = storeSavedProfiles([
-            { name: user.name, email: user.email },
-            ...profiles.value.filter((profile) => profile.email !== user.email),
+    const identifier = user?.[loginField];
+    if (user && identifier && (saveHere.value || selected.value)) {
+        profiles.value = storeSavedProfiles(loginField, [
+            { name: user.name, identifier },
+            ...profiles.value.filter(
+                (profile) => profile.identifier !== identifier,
+            ),
         ]);
     }
 }
@@ -101,7 +106,7 @@ function rememberProfile(page: Page<SharedPageProps>) {
         <ul class="flex flex-col gap-2">
             <li
                 v-for="profile in profiles"
-                :key="profile.email"
+                :key="profile.identifier"
                 class="flex items-center gap-2"
             >
                 <Button
@@ -114,7 +119,7 @@ function rememberProfile(page: Page<SharedPageProps>) {
                     <span class="grid min-w-0">
                         <span class="truncate">{{ profile.name }}</span>
                         <span class="truncate text-xs text-muted-foreground">{{
-                            profile.email
+                            profile.identifier
                         }}</span>
                     </span>
                 </Button>
@@ -123,7 +128,7 @@ function rememberProfile(page: Page<SharedPageProps>) {
                     variant="ghost"
                     size="icon-lg"
                     :aria-label="'Quitar el perfil de ' + profile.name"
-                    @click="removeProfile(profile.email)"
+                    @click="removeProfile(profile.identifier)"
                 >
                     <X aria-hidden="true" />
                 </Button>
@@ -155,7 +160,7 @@ function rememberProfile(page: Page<SharedPageProps>) {
                 <div class="min-w-0">
                     <p class="font-medium">{{ selected.name }}</p>
                     <p class="text-sm wrap-break-word text-muted-foreground">
-                        {{ selected.email }}
+                        {{ selected.identifier }}
                     </p>
                 </div>
                 <Button
@@ -165,21 +170,19 @@ function rememberProfile(page: Page<SharedPageProps>) {
                     @click="switchAccount(false)"
                     >Cambiar perfil</Button
                 >
-                <input type="hidden" name="email" :value="selected.email" />
-            </div>
-            <div v-else class="grid gap-2">
-                <Label for="email">Correo electrónico</Label>
-                <Input
-                    id="email"
-                    type="email"
-                    name="email"
-                    required
-                    v-focus
-                    autocomplete="off"
-                    placeholder="email@example.com"
+                <input
+                    type="hidden"
+                    :name="loginField"
+                    :value="selected.identifier"
                 />
-                <InputError :message="errors.email" />
             </div>
+            <AccountIdentifierField
+                v-else
+                id="login-identifier"
+                :field="loginField"
+                :error="errors[loginField]"
+                autofocus
+            />
 
             <div class="grid gap-2">
                 <div class="flex items-center justify-between">
@@ -203,7 +206,8 @@ function rememberProfile(page: Page<SharedPageProps>) {
                 />
                 <InputError
                     :message="
-                        errors.password ?? (selected ? errors.email : undefined)
+                        errors.password ??
+                        (selected ? errors[loginField] : undefined)
                     "
                 />
             </div>

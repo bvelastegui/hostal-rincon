@@ -45,7 +45,7 @@ return [
     |
     */
 
-    'username' => 'email',
+    'username' => env('HOSTAL_DESKTOP_SETUP', false) ? 'username' : 'email',
 
     'email' => 'email',
 
@@ -143,7 +143,7 @@ return [
     */
 
     'features' => [
-        Features::resetPasswords(),
+        ...(env('HOSTAL_DESKTOP_SETUP', false) ? [] : [Features::resetPasswords()]),
     ],
 
 ];

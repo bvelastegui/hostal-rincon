@@ -153,6 +153,7 @@ return [
     'attributes' => [
         'name' => 'nombre',
         'email' => 'correo electrónico',
+        'username' => 'nombre de usuario',
         'password' => 'contraseña',
         'password_confirmation' => 'confirmación de la contraseña',
         'current_password' => 'contraseña actual',

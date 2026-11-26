@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { Form, Head, Link } from '@inertiajs/vue3';
+import { Form, Head, Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import {
     index,
     storeEmployee,
     updateEmployee,
 } from '@/actions/App/Http/Controllers/AdvanceController';
+import AccountIdentifierField from '@/components/AccountIdentifierField.vue';
 import { Button } from '@/components/ui/button';
 import {
     Field,
@@ -17,9 +18,15 @@ import {
 import { Input } from '@/components/ui/input';
 
 const props = defineProps<{
-    employee: { id: number; name: string; email: string } | null;
+    employee: {
+        id: number;
+        name: string;
+        email: string | null;
+        username: string | null;
+    } | null;
 }>();
 
+const loginField = usePage().props.auth.loginField;
 const title = computed(() =>
     props.employee ? 'Editar empleado' : 'Nuevo empleado',
 );
@@ -63,25 +70,15 @@ defineOptions({
                     }}</FieldError>
                 </Field>
 
-                <Field :data-invalid="!!errors.email">
-                    <FieldLabel for="employee-email"
-                        >Correo de acceso</FieldLabel
-                    >
-                    <Input
-                        id="employee-email"
-                        name="email"
-                        type="email"
-                        :default-value="employee?.email"
-                        autocomplete="email"
-                        maxlength="255"
-                        class="min-h-11"
-                        required
-                        :aria-invalid="!!errors.email"
-                    />
-                    <FieldError v-if="errors.email">{{
-                        errors.email
-                    }}</FieldError>
-                </Field>
+                <AccountIdentifierField
+                    id="employee-identifier"
+                    :field="loginField"
+                    :label="
+                        loginField === 'email' ? 'Correo de acceso' : undefined
+                    "
+                    :value="employee?.[loginField]"
+                    :error="errors[loginField]"
+                />
 
                 <Field :data-invalid="!!errors.password">
                     <FieldLabel for="employee-password">

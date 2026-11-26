@@ -4,6 +4,8 @@ namespace App\Concerns;
 
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Unique;
 
@@ -18,7 +20,37 @@ trait ProfileValidationRules
     {
         return [
             'name' => $this->nameRules(),
-            'email' => $this->emailRules($userId),
+            ...$this->loginFieldRules($userId),
+        ];
+    }
+
+    /** @return array<string, array<int, Unique|ValidationRule|array<mixed>|string>> */
+    protected function loginFieldRules(?int $userId = null): array
+    {
+        return config('app.desktop')
+            ? ['username' => $this->usernameRules($userId)]
+            : ['email' => $this->emailRules($userId)];
+    }
+
+    protected function normalizeUsername(Request $request): void
+    {
+        if (config('app.desktop') && is_string($request->input('username'))) {
+            $request->merge(['username' => Str::lower($request->input('username'))]);
+        }
+    }
+
+    /** @return list<string|Unique> */
+    protected function usernameRules(?int $userId = null): array
+    {
+        $unique = Rule::unique(User::class, 'username');
+
+        return [
+            'required',
+            'string',
+            'min:3',
+            'max:64',
+            'regex:/\A[a-z0-9][a-z0-9._-]*\z/',
+            $userId === null ? $unique : $unique->ignore($userId),
         ];
     }
 

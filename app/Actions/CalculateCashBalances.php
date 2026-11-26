@@ -20,21 +20,12 @@ final class CalculateCashBalances
     public function handle(bool $includeTransit, bool $includeAccounts = false): array
     {
         return DB::transaction(function () use ($includeTransit, $includeAccounts): array {
-            $opening = CashOpening::query()->sole();
             $totals = $this->movementTotals(CashMovement::query())
                 ->when($includeAccounts, fn ($query) => $query->addSelect('bank_account_id')->groupBy('bank_account_id'))
                 ->get();
 
-            $deposits = $totals->where('kind', 'deposit')->where('payment_method', 'cash');
-            $deposited = (int) $deposits->sum('confirmed_cents');
-            $transit = (int) $deposits->sum('pending_cents');
+            [$cash, $transit] = $this->cashBalances($totals);
             $bank = (int) BankAccount::query()->sum('opening_balance_cents') + $this->bankChange($totals);
-            $cash = $opening->opening_balance_cents === null ? null : $opening->opening_balance_cents
-                + (int) $totals->where('kind', 'income')->where('payment_method', 'cash')->sum('confirmed_cents')
-                - (int) $totals->whereIn('kind', ['expense', 'advance'])->where('payment_method', 'cash')->sum('confirmed_cents')
-                - $deposited - $transit
-                - (int) Advance::query()->where('cash_opening_id', $opening->id)->whereNull('cash_movement_id')->sum('amount_cents')
-                + (int) CashClosing::query()->sum('cash_adjustment_cents');
 
             $balances = [
                 'cash' => $cash,
@@ -55,6 +46,23 @@ final class CalculateCashBalances
             }
 
             return $balances;
+        }, attempts: 3);
+    }
+
+    /** @return array{cash: int|null, bank: int, transit: null, total: null} */
+    public function forOperator(int $operatorId, ?int $shiftId): array
+    {
+        return DB::transaction(function () use ($operatorId, $shiftId): array {
+            $cashTotals = $this->movementTotals(CashMovement::query()->where('payment_method', 'cash'))->get();
+            [$cash] = $this->cashBalances($cashTotals);
+            $bank = $shiftId === null ? 0 : $this->bankChange(
+                $this->movementTotals(CashMovement::query()
+                    ->where('cash_shift_id', $shiftId)
+                    ->where('recorded_by', $operatorId)
+                    ->where('payment_method', 'transfer'))->get(),
+            );
+
+            return ['cash' => $cash, 'bank' => $bank, 'transit' => null, 'total' => null];
         }, attempts: 3);
     }
 
@@ -96,6 +104,26 @@ final class CalculateCashBalances
                 SUM(CASE WHEN confirmed_at IS NOT NULL THEN amount_cents ELSE 0 END) as confirmed_cents,
                 SUM(CASE WHEN confirmed_at IS NULL THEN amount_cents ELSE 0 END) as pending_cents')
             ->groupBy('kind', 'payment_method');
+    }
+
+    /**
+     * @param  Collection<int, CashMovement>  $totals
+     * @return array{int|null, int}
+     */
+    private function cashBalances(Collection $totals): array
+    {
+        $opening = CashOpening::query()->sole();
+        $deposits = $totals->where('kind', 'deposit')->where('payment_method', 'cash');
+        $deposited = (int) $deposits->sum('confirmed_cents');
+        $transit = (int) $deposits->sum('pending_cents');
+        $cash = $opening->opening_balance_cents === null ? null : $opening->opening_balance_cents
+            + (int) $totals->where('kind', 'income')->where('payment_method', 'cash')->sum('confirmed_cents')
+            - (int) $totals->whereIn('kind', ['expense', 'advance'])->where('payment_method', 'cash')->sum('confirmed_cents')
+            - $deposited - $transit
+            - (int) Advance::query()->where('cash_opening_id', $opening->id)->whereNull('cash_movement_id')->sum('amount_cents')
+            + (int) CashClosing::query()->sum('cash_adjustment_cents');
+
+        return [$cash, $transit];
     }
 
     /** @param Collection<int, CashMovement> $totals */
