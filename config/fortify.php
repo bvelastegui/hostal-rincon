@@ -143,7 +143,7 @@ return [
     */
 
     'features' => [
-        Features::resetPasswords(),
+        ...(env('HOSTAL_DESKTOP_SETUP', false) ? [] : [Features::resetPasswords()]),
     ],
 
 ];
