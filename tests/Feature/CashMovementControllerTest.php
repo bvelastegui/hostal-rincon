@@ -77,7 +77,7 @@ test('registra un cobro en efectivo y un egreso una sola vez al guardar', functi
 
     $this->get(route('movements.index'))->assertInertia(fn (Assert $page) => $page
         ->where('balances.cash', 11520)
-        ->where('balances.total', 11520)
+        ->where('balances.total', null)
         ->has('movements.data', 2));
     $this->get(route('movements.index', ['kind' => 'expense', 'recorded_by' => $operator->id, 'status' => 'confirmed', 'source' => 'cash']))
         ->assertInertia(fn (Assert $page) => $page->has('movements.data', 1)
@@ -116,7 +116,7 @@ test('valida el voucher por banco de origen y acredita a la cuenta de destino', 
     $movement = CashMovement::query()->sole();
 
     $this->get(route('movements.index'))->assertInertia(fn (Assert $page) => $page
-        ->where('balances.bank', 500)
+        ->where('balances.bank', 0)
         ->where('movements.data.0.originBankName', $origin->name)
         ->where('movements.data.0.accountBankName', $destination->name));
     $this->get(route('movements.index', ['status' => 'pending', 'source' => 'bank:'.$account->id]))
@@ -153,7 +153,7 @@ test('valida el voucher por banco de origen y acredita a la cuenta de destino', 
         'voucher' => 'V-01',
     ]);
     $this->assertDatabaseCount('cash_movements', 2);
-    $this->get(route('movements.index'))->assertInertia(fn (Assert $page) => $page->where('balances.bank', 5510));
+    $this->get(route('movements.index'))->assertInertia(fn (Assert $page) => $page->where('balances.bank', 5010));
 
     $destination->is_active = false;
     $destination->save();
@@ -195,9 +195,54 @@ test('registra egresos bancarios con el usuario de sesión y resta solo de la cu
     expect(CashOpening::query()->sole()->opening_locked_at)->toBeNull();
     $this->get(route('movements.index'))->assertInertia(fn (Assert $page) => $page
         ->where('balances.cash', 10000)
-        ->where('balances.bank', 4209)
+        ->where('balances.bank', -791)
         ->where('balances.transit', null)
-        ->where('balances.total', 14209));
+        ->where('balances.total', null));
+});
+
+test('el resumen del operador solo incluye sus transferencias vigentes del turno activo', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $operator = User::factory()->create();
+    $origin = Bank::factory()->create();
+    $account = BankAccount::factory()->create(['opening_balance_cents' => 10000]);
+    CashOpening::query()->update(['opening_balance_cents' => 5000]);
+
+    $previousShift = openMovementShift($operator);
+    $transfer = [
+        'kind' => 'income',
+        'payment_method' => 'transfer',
+        'description' => 'Cobro bancario',
+        'origin_bank_id' => $origin->id,
+        'bank_account_id' => $account->id,
+    ];
+    $register = fn (User $recorder, array $details) => $this->actingAs($recorder)->post(route('movements.store'), [
+        ...$transfer,
+        'request_id' => (string) Str::uuid(),
+        ...$details,
+    ])->assertSessionHasNoErrors();
+
+    $register($operator, ['amount' => '40', 'confirm' => true, 'voucher' => 'TURNO-ANTERIOR']);
+    $previousShift->update(['ended_at' => now()]);
+    openMovementShift($operator);
+
+    $register($operator, ['amount' => '30', 'confirm' => true, 'voucher' => 'COBRO-PROPIO']);
+    $register($operator, ['kind' => 'expense', 'amount' => '7', 'origin_bank_id' => null, 'voucher' => 'PAGO-PROPIO']);
+    $register($operator, ['amount' => '11']);
+    $register($operator, ['amount' => '13', 'confirm' => true, 'voucher' => 'COBRO-ANULADO']);
+    $voided = CashMovement::query()->latest('id')->firstOrFail();
+    $this->actingAs($admin)->patch(route('movements.annul', $voided), [
+        'void_reason' => 'Registro duplicado',
+    ])->assertSessionHasNoErrors();
+    $register($admin, ['amount' => '20', 'confirm' => true, 'voucher' => 'COBRO-ADMIN']);
+
+    $this->actingAs($operator);
+    foreach ([[], ['status' => 'pending']] as $filters) {
+        $this->get(route('movements.index', $filters))->assertInertia(fn (Assert $page) => $page
+            ->where('balances', ['cash' => 5000, 'bank' => 2300, 'transit' => null, 'total' => null]));
+    }
+
+    $this->actingAs($admin)->get(route('movements.index'))->assertInertia(fn (Assert $page) => $page
+        ->where('balances', ['cash' => 5000, 'bank' => 18300, 'transit' => 0, 'total' => 23300]));
 });
 
 test('un egreso en efectivo solo puede usar el saldo que queda en caja después de los retiros', function () {
@@ -375,7 +420,7 @@ test('solo la administradora puede consultar y gestionar depósitos y devolucion
         ->where('canManageDeposits', false)
         ->where('depositsInTransit', null)
         ->where('balances.transit', null)
-        ->where('balances.total', 6985)
+        ->where('balances.total', null)
         ->has('movements.data', 0));
 
     $this->actingAs($administrator);

@@ -149,14 +149,18 @@ function changeDate(range: { from: string; to: string } | null) {
 
 const balances = computed(() => [
     { label: 'Efectivo', cents: props.balances.cash },
-    { label: 'Banco', cents: props.balances.bank },
-    ...(props.canManageDeposits
-        ? [{ label: 'En tránsito', cents: props.balances.transit }]
-        : []),
     {
-        label: props.canManageDeposits ? 'Total' : 'Total disponible',
-        cents: props.balances.total,
+        label: props.canManageDeposits
+            ? 'Banco'
+            : 'Mis transferencias del turno',
+        cents: props.balances.bank,
     },
+    ...(props.canManageDeposits
+        ? [
+              { label: 'En tránsito', cents: props.balances.transit },
+              { label: 'Total', cents: props.balances.total },
+          ]
+        : []),
 ]);
 </script>
 
@@ -234,7 +238,7 @@ const balances = computed(() => [
             </h2>
             <dl
                 class="grid grid-cols-2 gap-3 border-y py-3 sm:gap-4"
-                :class="canManageDeposits ? 'sm:grid-cols-4' : 'sm:grid-cols-3'"
+                :class="{ 'sm:grid-cols-4': canManageDeposits }"
             >
                 <div
                     v-for="balance in balances"

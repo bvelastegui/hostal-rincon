@@ -123,7 +123,9 @@ class CashMovementController extends Controller
                     ->with('bank:id,name')->orderBy('name')->get(['id', 'bank_id', 'name'])
                     ->map(fn (BankAccount $account): array => ['id' => $account->id, 'name' => $account->displayName()]),
             ],
-            'balances' => $calculateCashBalances->handle($canManageDeposits),
+            'balances' => $user->is_admin
+                ? $calculateCashBalances->handle(includeTransit: true)
+                : $calculateCashBalances->forOperator($user->id, $visibleShiftId),
             'movements' => $movements,
             'depositsInTransit' => $transit,
         ]);
