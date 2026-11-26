@@ -16,6 +16,8 @@ return [
     'name' => env('APP_NAME', 'Laravel'),
 
     'desktop' => (bool) env('HOSTAL_DESKTOP_SETUP', false),
+    'desktop_version' => env('HOSTAL_DESKTOP_VERSION'),
+    'desktop_device_id' => env('HOSTAL_DESKTOP_DEVICE_ID'),
 
     /*
     |--------------------------------------------------------------------------

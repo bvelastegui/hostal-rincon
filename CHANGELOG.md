@@ -4,6 +4,12 @@ El proyecto usa versionamiento semántico (`MAJOR.MINOR.PATCH`). Incrementa `MAJ
 
 Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la fecha en formato `AAAA-MM-DD` y etiqueta el commit de la entrega con `vMAJOR.MINOR.PATCH`.
 
+## 0.11.0 (prevista)
+
+- Administración genera respaldos locales en **Ajustes → Respaldos**. El ZIP contiene una copia consistente de SQLite en WAL y un manifiesto con la versión y el SHA-256. [HR-20](https://nexodigital.youtrack.cloud/issue/HR-20)
+- **Configuración inicial** guía el registro de la cuenta administradora, el efectivo y los bancos. Laravel valida los pasos antes de avanzar y vuelve a validar al guardar.
+- Una instalación nueva puede recuperar un ZIP desde el asistente. Se verifica la compatibilidad y se aplican las migraciones necesarias antes de importar los datos. [HR-19](https://nexodigital.youtrack.cloud/issue/HR-19)
+
 ## 0.10.6 (prevista)
 
 - Separa los reportes en **Saldos actuales**, **Ingresos**, **Gastos**, **Depósitos al banco** y **Adelantos por empleado**. Los reportes por mes muestran sus totales y el detalle paginado de las operaciones.

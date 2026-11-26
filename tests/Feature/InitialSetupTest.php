@@ -29,6 +29,37 @@ test('la configuración inicial se habilita únicamente para escritorio', functi
     $this->assertDatabaseCount('users', 0);
 });
 
+test('Laravel valida la cuenta y el efectivo por paso sin guardar la configuración', function () {
+    $url = route('initial-setup.store');
+    $account = ['Precognition' => 'true', 'Precognition-Validate-Only' => 'name,username,password'];
+    $cash = ['Precognition' => 'true', 'Precognition-Validate-Only' => 'opening_balance'];
+
+    $this->postJson($url, [], $account)->assertUnprocessable()
+        ->assertJsonValidationErrors(['name', 'username', 'password'])
+        ->assertJsonMissingValidationErrors('opening_balance');
+
+    $data = initialSetupData();
+    unset($data['opening_balance']);
+
+    $this->postJson($url, [...$data, 'password_confirmation' => 'Otra'], $account)
+        ->assertUnprocessable()->assertJsonValidationErrors('password');
+
+    $this->postJson($url, $data, $account)
+        ->assertNoContent()->assertHeader('Precognition-Success', 'true');
+
+    $this->postJson($url, ['opening_balance' => '-0,01'], $cash)
+        ->assertUnprocessable()->assertJsonValidationErrors('opening_balance')
+        ->assertJsonMissingValidationErrors('username');
+
+    $this->postJson($url, ['opening_balance' => '125,50'], $cash)
+        ->assertNoContent()->assertHeader('Precognition-Success', 'true');
+
+    $this->assertGuest();
+    $this->assertDatabaseCount('users', 0);
+    $this->assertDatabaseCount('bank_accounts', 0);
+    $this->assertDatabaseHas('cash_openings', ['opening_balance_cents' => null]);
+});
+
 test('el primer inicio registra la cuenta administradora, el efectivo y las cuentas de un mismo banco', function () {
     $this->get(route('home'))->assertRedirectToRoute('initial-setup.create');
     $this->get(route('initial-setup.create'))->assertInertia(fn (Assert $page) => $page->component('auth/InitialSetup'));

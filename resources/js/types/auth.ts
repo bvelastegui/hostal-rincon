@@ -17,6 +17,7 @@ export type Auth = {
     loginField: LoginField;
     canManageAdvances: boolean;
     canManageCashSettings: boolean;
+    canManageLocalBackups: boolean;
     canViewMonthlyReport: boolean;
     canManageMovementSensitivity: boolean;
     cashShiftAccess: 'owner' | 'restricted' | null;

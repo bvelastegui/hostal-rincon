@@ -11,6 +11,7 @@ const props = defineProps<{
     value?: string | null;
     error?: string;
     autofocus?: boolean;
+    serverValidationOnly?: boolean;
 }>();
 
 const label = computed(
@@ -31,7 +32,13 @@ const label = computed(
             :name="field"
             :type="field === 'email' ? 'email' : 'text'"
             :default-value="value ?? undefined"
-            :maxlength="field === 'username' ? 64 : 255"
+            :maxlength="
+                serverValidationOnly
+                    ? undefined
+                    : field === 'username'
+                      ? 64
+                      : 255
+            "
             class="min-h-11"
             autocomplete="off"
             autocapitalize="none"

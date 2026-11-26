@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Settings\CashSettingsController;
+use App\Http\Controllers\Settings\LocalBackupController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Support\Facades\Route;
@@ -21,6 +22,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('user-password.update');
 
     Route::inertia('settings/appearance', 'settings/Appearance')->name('appearance.edit');
+
+    Route::prefix('settings/backups')->name('backups.')->can('manage-local-backups')->group(function () {
+        Route::get('/', [LocalBackupController::class, 'index'])->name('index');
+        Route::get('download', [LocalBackupController::class, 'download'])
+            ->middleware('throttle:6,1')->name('download');
+    });
 
     Route::prefix('settings/cash')->name('cash-settings.')->can('manage-cash-settings')->group(function () {
         Route::get('/', [CashSettingsController::class, 'edit'])->name('edit');

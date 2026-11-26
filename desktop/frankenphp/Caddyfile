@@ -1,0 +1,45 @@
+{
+	admin off
+	persist_config off
+	auto_https off
+	storage file_system {
+		root "{$HOSTAL_CADDY_STORAGE}"
+	}
+	frankenphp {
+		num_threads 2
+		max_threads 3
+		worker {
+			file "{$HOSTAL_WEB_ROOT}/public/frankenphp-worker.php"
+			num 1
+			env MAX_REQUESTS 500
+		}
+	}
+}
+
+http://{$HOSTAL_DESKTOP_ADDRESS} {
+	bind 127.0.0.1
+	root * "{$HOSTAL_WEB_ROOT}/public"
+
+	route {
+		@unauthorized not header X-Hostal-Desktop {$HOSTAL_DESKTOP_TOKEN}
+		respond @unauthorized 403
+
+		handle /desktop-ready {
+			header X-Hostal-Ready {$HOSTAL_DESKTOP_TOKEN}
+			respond 204
+		}
+
+		@assets path /build/* /favicon.svg /favicon.ico /apple-touch-icon.png /robots.txt
+		handle @assets {
+			file_server
+		}
+
+		handle {
+			rewrite * /frankenphp-worker.php
+			php_server {
+				index frankenphp-worker.php
+				try_files frankenphp-worker.php
+			}
+		}
+	}
+}
