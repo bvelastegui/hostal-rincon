@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 
 defineProps<{
     id: string;
+    name?: string;
     balanceCents?: number | null;
     error?: string;
     disabled?: boolean;
@@ -21,7 +22,7 @@ defineProps<{
         <FieldLabel :for="id">Saldo inicial (USD)</FieldLabel>
         <Input
             :id="id"
-            name="opening_balance"
+            :name="name ?? 'opening_balance'"
             inputmode="decimal"
             class="min-h-11"
             placeholder="0,00"

@@ -4,6 +4,10 @@ El proyecto usa versionamiento semántico (`MAJOR.MINOR.PATCH`). Incrementa `MAJ
 
 Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la fecha en formato `AAAA-MM-DD` y etiqueta el commit de la entrega con `vMAJOR.MINOR.PATCH`.
 
+## 0.10.0 (prevista)
+
+- El primer inicio de escritorio permite crear la cuenta administradora y cargar el efectivo y las cuentas bancarias iniciales en un solo formulario.
+
 ## 0.9.0 (prevista)
 
 - Administración puede anular o reemplazar movimientos del turno abierto antes de un cierre. El historial agrupa los registros anulados bajo su reemplazo y conserva el motivo y la autoría. Los saldos y el reporte excluyen los movimientos anulados. [HR-18](https://nexodigital.youtrack.cloud/issue/HR-18)

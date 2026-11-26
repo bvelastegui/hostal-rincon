@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Settings;
 
+use App\Actions\CreateBankAccount;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\OpeningBalanceRequest;
 use App\Http\Requests\Settings\StoreBankAccountRequest;
@@ -20,8 +21,6 @@ use Inertia\Response;
 
 class CashSettingsController extends Controller
 {
-    private const string DUPLICATE_ACCOUNT_NAME = 'Ya existe una cuenta con este nombre en el banco seleccionado.';
-
     public function edit(): Response
     {
         $cashOpening = CashOpening::query()->sole();
@@ -97,28 +96,17 @@ class CashSettingsController extends Controller
         ]);
     }
 
-    public function storeAccount(StoreBankAccountRequest $request): RedirectResponse
+    public function storeAccount(StoreBankAccountRequest $request, CreateBankAccount $createAccount): RedirectResponse
     {
         $data = $request->validated();
-        $name = Str::squish($data['name']);
-        DB::transaction(function () use ($data, $name, $request): void {
+        DB::transaction(function () use ($data, $request, $createAccount): void {
             $bank = Bank::query()->whereKey($data['bank_id'])->lockForUpdate()->firstOrFail();
 
             if (! $bank->is_active) {
                 throw ValidationException::withMessages(['bank_id' => 'Selecciona un banco activo.']);
             }
 
-            $account = BankAccount::query()->createOrFirst([
-                'bank_id' => $bank->id,
-                'name_key' => Str::lower($name),
-            ], [
-                'name' => $name,
-                'opening_balance_cents' => $request->balanceCents(),
-            ]);
-
-            if (! $account->wasRecentlyCreated) {
-                throw ValidationException::withMessages(['name' => self::DUPLICATE_ACCOUNT_NAME]);
-            }
+            $createAccount($bank, $data['name'], $request->balanceCents());
         }, attempts: 3);
 
         return $this->saved('bank-settings.edit', 'Cuenta bancaria agregada.');
@@ -145,7 +133,7 @@ class CashSettingsController extends Controller
                 $account->save();
             }, attempts: 3);
         } catch (UniqueConstraintViolationException) {
-            throw ValidationException::withMessages(['name' => self::DUPLICATE_ACCOUNT_NAME]);
+            throw ValidationException::withMessages(['name' => CreateBankAccount::DUPLICATE_NAME]);
         }
 
         return $this->saved('bank-settings.edit', 'Cuenta bancaria actualizada.');

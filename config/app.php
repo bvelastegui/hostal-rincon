@@ -15,6 +15,8 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
+    'desktop' => (bool) env('HOSTAL_DESKTOP_SETUP', false),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

@@ -12,7 +12,7 @@ class OpeningBalanceRequest extends FormRequest
         $balance = $this->input('opening_balance');
 
         if (is_string($balance)) {
-            $this->merge(['opening_balance' => str_replace(',', '.', $balance)]);
+            $this->merge(['opening_balance' => ConvertUsdToCents::normalize($balance)]);
         }
     }
 
@@ -20,14 +20,8 @@ class OpeningBalanceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'opening_balance' => ['required', ...$this->openingBalanceRules()],
+            'opening_balance' => ['required', ...ConvertUsdToCents::OPENING_BALANCE_RULES],
         ];
-    }
-
-    /** @return list<string> */
-    protected function openingBalanceRules(): array
-    {
-        return ['numeric', 'decimal:0,2', 'min:0', 'max:999999999.99'];
     }
 
     public function balanceCents(): int
