@@ -86,7 +86,7 @@ class InitialSetupController extends Controller implements HasMiddleware
 
             $user = new User([
                 'name' => $data['name'],
-                'email' => Str::lower($data['email']),
+                'username' => $data['username'],
                 'password' => $data['password'],
             ]);
             $user->is_admin = true;

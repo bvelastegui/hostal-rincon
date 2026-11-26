@@ -1,7 +1,10 @@
+export type LoginField = 'email' | 'username';
+
 export type User = {
     id: number;
     name: string;
-    email: string;
+    email: string | null;
+    username?: string | null;
     avatar?: string;
     email_verified_at: string | null;
     created_at: string;
@@ -11,6 +14,7 @@ export type User = {
 
 export type Auth = {
     user: User;
+    loginField: LoginField;
     canManageAdvances: boolean;
     canManageCashSettings: boolean;
     canViewMonthlyReport: boolean;

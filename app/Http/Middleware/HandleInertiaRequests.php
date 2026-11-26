@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Middleware;
+use Laravel\Fortify\Fortify;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -47,6 +48,7 @@ class HandleInertiaRequests extends Middleware
             'name' => config('app.name'),
             'auth' => [
                 'user' => $user,
+                'loginField' => Fortify::username(),
                 'canManageAdvances' => Gate::allows('manage-advances'),
                 'canManageCashSettings' => Gate::allows('manage-cash-settings'),
                 'canViewMonthlyReport' => Gate::allows('view-monthly-report'),

@@ -2,6 +2,7 @@
 import { Form, Head } from '@inertiajs/vue3';
 import { Plus } from '@lucide/vue';
 import { ref } from 'vue';
+import AccountIdentifierField from '@/components/AccountIdentifierField.vue';
 import OpeningBalanceField from '@/components/OpeningBalanceField.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Button } from '@/components/ui/button';
@@ -62,22 +63,11 @@ let nextAccount = 0;
                             errors.name
                         }}</FieldError>
                     </Field>
-                    <Field :data-invalid="!!errors.email">
-                        <FieldLabel for="setup-email"
-                            >Correo electrónico</FieldLabel
-                        >
-                        <Input
-                            id="setup-email"
-                            name="email"
-                            type="email"
-                            maxlength="255"
-                            :aria-invalid="!!errors.email"
-                            required
-                        />
-                        <FieldError v-if="errors.email">{{
-                            errors.email
-                        }}</FieldError>
-                    </Field>
+                    <AccountIdentifierField
+                        id="setup-username"
+                        field="username"
+                        :error="errors.username"
+                    />
                     <Field :data-invalid="!!errors.password">
                         <FieldLabel for="setup-secret">Contraseña</FieldLabel>
                         <PasswordInput

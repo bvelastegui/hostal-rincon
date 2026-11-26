@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\CalculateCashBalances;
 use App\Actions\ConfirmCashMovement;
+use App\Concerns\ProfileValidationRules;
 use App\Http\Requests\StoreAdvanceRequest;
 use App\Models\Advance;
 use App\Models\BankAccount;
@@ -15,17 +16,19 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class AdvanceController extends Controller
 {
+    use ProfileValidationRules;
+
     public function index(Request $request): Response
     {
         $filters = $request->validate([
@@ -80,15 +83,17 @@ class AdvanceController extends Controller
         abort_if($employee->is_admin, 404);
 
         return Inertia::render('AdvanceEmployeeForm', [
-            'employee' => ['id' => $employee->id, 'name' => $employee->name, 'email' => $employee->email],
+            'employee' => $employee->only(['id', 'name', 'email', 'username']),
         ]);
     }
 
     public function storeEmployee(Request $request): RedirectResponse
     {
+        $this->normalizeUsername($request);
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            ...$this->loginFieldRules(),
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ], [
             'name.required' => 'Ingresa el nombre del empleado.',
@@ -101,10 +106,12 @@ class AdvanceController extends Controller
 
         $employee = User::query()->create([
             'name' => $data['name'],
-            'email' => $data['email'],
+            ...Arr::only($data, ['email', 'username']),
             'password' => Hash::make($data['password']),
         ]);
-        $employee->forceFill(['email_verified_at' => now()])->save();
+        if ($employee->email !== null) {
+            $employee->forceFill(['email_verified_at' => now()])->save();
+        }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Empleado creado.']);
 
@@ -115,9 +122,11 @@ class AdvanceController extends Controller
     {
         abort_if($employee->is_admin, 404);
 
+        $this->normalizeUsername($request);
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($employee->id)],
+            ...$this->loginFieldRules($employee->id),
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ], [
             'name.required' => 'Ingresa el nombre del empleado.',
@@ -127,8 +136,7 @@ class AdvanceController extends Controller
             'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
         ]);
 
-        $employee->name = $data['name'];
-        $employee->email = $data['email'];
+        $employee->fill(Arr::only($data, ['name', 'email', 'username']));
         if ($request->filled('password')) {
             $employee->password = Hash::make($data['password']);
         }

@@ -45,7 +45,7 @@ return [
     |
     */
 
-    'username' => 'email',
+    'username' => env('HOSTAL_DESKTOP_SETUP', false) ? 'username' : 'email',
 
     'email' => 'email',
 

@@ -1,47 +1,65 @@
-const storageKey = 'hostal-rincon:saved-login-profiles';
+import type { LoginField } from '@/types/auth';
+
 const profileLimit = 5;
 
-export type SavedLoginProfile = { name: string; email: string };
+export type SavedLoginProfile = { name: string; identifier: string };
 
-function isSavedProfile(value: unknown): value is SavedLoginProfile {
-    return (
-        typeof value === 'object' &&
-        value !== null &&
-        'name' in value &&
-        typeof value.name === 'string' &&
-        'email' in value &&
-        typeof value.email === 'string'
-    );
+function profilesKey(field: LoginField) {
+    return field === 'email'
+        ? 'hostal-rincon:saved-login-profiles'
+        : 'hostal-rincon:saved-username-profiles';
 }
 
-export function loadSavedProfiles(): SavedLoginProfile[] {
+function readProfile(value: unknown, field: LoginField): SavedLoginProfile[] {
+    if (
+        typeof value !== 'object' ||
+        value === null ||
+        !('name' in value) ||
+        typeof value.name !== 'string' ||
+        !(field in value)
+    ) {
+        return [];
+    }
+    const identifier: unknown = Reflect.get(value, field);
+    return typeof identifier === 'string' && identifier.length
+        ? [{ name: value.name, identifier }]
+        : [];
+}
+
+export function loadSavedProfiles(field: LoginField): SavedLoginProfile[] {
     try {
         const saved: unknown = JSON.parse(
-            localStorage.getItem(storageKey) ?? '[]',
+            localStorage.getItem(profilesKey(field)) ?? '[]',
         );
-        if (Array.isArray(saved)) {
-            return saved
-                .filter(isSavedProfile)
-                .slice(0, profileLimit)
-                .map(({ name, email }) => ({ name, email }));
-        }
+        return Array.isArray(saved)
+            ? saved
+                  .flatMap((profile) => readProfile(profile, field))
+                  .slice(0, profileLimit)
+            : [];
     } catch {
-        // Una sesión manual sigue disponible si el navegador bloquea el almacenamiento.
+        // El inicio manual sigue disponible si el almacenamiento está bloqueado.
+        return [];
     }
-    return [];
 }
 
 export function storeSavedProfiles(
+    field: LoginField,
     profiles: SavedLoginProfile[],
 ): SavedLoginProfile[] {
-    const saved = profiles
-        .slice(0, profileLimit)
-        .map(({ name, email }) => ({ name, email }));
+    const saved = profiles.slice(0, profileLimit);
     try {
         if (saved.length) {
-            localStorage.setItem(storageKey, JSON.stringify(saved));
+            localStorage.setItem(
+                profilesKey(field),
+                JSON.stringify(
+                    saved.map(({ name, identifier }) => ({
+                        name,
+                        [field]: identifier,
+                    })),
+                ),
+            );
         } else {
-            localStorage.removeItem(storageKey);
+            localStorage.removeItem(profilesKey(field));
         }
     } catch {
         // Guardar perfiles es opcional para el inicio de sesión.

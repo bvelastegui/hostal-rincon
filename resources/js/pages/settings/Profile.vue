@@ -3,6 +3,7 @@ import { Form, Head, usePage } from '@inertiajs/vue3';
 import { LogOut } from '@lucide/vue';
 import { computed } from 'vue';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
+import AccountIdentifierField from '@/components/AccountIdentifierField.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import LogoutLink from '@/components/LogoutLink.vue';
@@ -24,6 +25,7 @@ defineOptions({
 });
 
 const page = usePage();
+const loginField = page.props.auth.loginField;
 const user = computed(() => page.props.auth.user);
 </script>
 
@@ -35,7 +37,11 @@ const user = computed(() => page.props.auth.user);
             variant="small"
             title="Perfil"
             hide-title-on-mobile
-            description="Actualiza tu nombre y correo electrónico"
+            :description="
+                loginField === 'username'
+                    ? 'Actualiza tu nombre y usuario de acceso.'
+                    : 'Actualiza tu nombre y correo electrónico.'
+            "
         />
 
         <Form
@@ -57,20 +63,12 @@ const user = computed(() => page.props.auth.user);
                 <InputError class="mt-2" :message="errors.name" />
             </div>
 
-            <div class="grid gap-2">
-                <Label for="email">Correo electrónico</Label>
-                <Input
-                    id="email"
-                    type="email"
-                    class="mt-1 block w-full"
-                    name="email"
-                    :default-value="user.email"
-                    required
-                    autocomplete="username"
-                    placeholder="Correo electrónico"
-                />
-                <InputError class="mt-2" :message="errors.email" />
-            </div>
+            <AccountIdentifierField
+                id="profile-identifier"
+                :field="loginField"
+                :value="user[loginField]"
+                :error="errors[loginField]"
+            />
 
             <Button
                 type="submit"
