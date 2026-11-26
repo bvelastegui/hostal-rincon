@@ -4,6 +4,11 @@ El proyecto usa versionamiento semántico (`MAJOR.MINOR.PATCH`). Incrementa `MAJ
 
 Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la fecha en formato `AAAA-MM-DD` y etiqueta el commit de la entrega con `vMAJOR.MINOR.PATCH`.
 
+## 0.10.6 (prevista)
+
+- Separa los reportes en **Saldos actuales**, **Ingresos**, **Gastos**, **Depósitos al banco** y **Adelantos por empleado**. Los reportes por mes muestran sus totales y el detalle paginado de las operaciones.
+- Corrige la detección de rutas absolutas para la caché de Laravel en la instalación de escritorio en Windows.
+
 ## 0.10.5 (prevista)
 
 - El encabezado de escritorio reúne el logo y dos grupos de navegación en una sola cinta. Las opciones muestran iconos de 24 px sobre el texto y separan los módulos de **Ajustes** y **Cambiar de sesión**.
