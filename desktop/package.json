@@ -1,0 +1,102 @@
+{
+    "name": "hostal-rincon-escritorio",
+    "version": "0.11.0",
+    "private": true,
+    "description": "Control local de caja para Hostal Rincón",
+    "author": "Nexo Digital",
+    "main": "main.cjs",
+    "scripts": {
+        "dev": "electron .",
+        "build:windows": "electron-builder --win nsis --x64 --publish never",
+        "build:frankenphp": "node frankenphp/build.cjs",
+        "build:linux": "electron-builder --linux AppImage --x64 --publish never"
+    },
+    "devDependencies": {
+        "electron": "45.5.0",
+        "electron-builder": "26.18.0"
+    },
+    "build": {
+        "appId": "com.nexodigital.hostalrincon",
+        "productName": "Hostal Rincón",
+        "files": [
+            "main.cjs",
+            "package.json"
+        ],
+        "extraResources": [
+            {
+                "from": "runtime/web",
+                "to": "web",
+                "filter": [
+                    "app/**",
+                    "bootstrap/**",
+                    "config/**",
+                    "database/migrations/**",
+                    "lang/**",
+                    "public/**",
+                    "resources/views/**",
+                    "routes/**",
+                    "vendor/**",
+                    "artisan"
+                ]
+            },
+            {
+                "from": "router.php",
+                "to": "router.php"
+            }
+        ],
+        "win": {
+            "signExecutable": false,
+            "icon": "runtime/hostal-rincon.ico",
+            "artifactName": "Hostal-Rincon-${version}-Windows-${arch}-Setup.${ext}",
+            "extraResources": [
+                {
+                    "from": "runtime/php",
+                    "to": "php",
+                    "filter": [
+                        "php.exe",
+                        "*.dll",
+                        "ext/php_pdo_sqlite.dll",
+                        "ext/php_sqlite3.dll",
+                        "ext/php_mbstring.dll",
+                        "ext/php_openssl.dll",
+                        "ext/php_fileinfo.dll",
+                        "ext/php_intl.dll",
+                        "license.txt",
+                        "readme-redist-bins.txt"
+                    ]
+                },
+                {
+                    "from": "runtime/vc_redist.x64.exe",
+                    "to": "vc_redist.x64.exe"
+                }
+            ]
+        },
+        "nsis": {
+            "oneClick": false,
+            "perMachine": false,
+            "allowElevation": true,
+            "runAfterFinish": true,
+            "deleteAppDataOnUninstall": false,
+            "installerLanguages": [
+                "es_ES"
+            ],
+            "include": "installer.nsh",
+            "installerIcon": "runtime/hostal-rincon.ico",
+            "uninstallerIcon": "runtime/hostal-rincon.ico"
+        },
+        "toolsets": {
+            "wine": "1.0.1"
+        },
+        "linux": {
+            "artifactName": "Hostal-Rincon-${version}-Linux-${arch}.${ext}",
+            "category": "Office",
+            "icon": "runtime/hostal-rincon.png",
+            "extraResources": [
+                {
+                    "from": "runtime/php-linux",
+                    "to": "php"
+                }
+            ]
+        }
+    }
+}

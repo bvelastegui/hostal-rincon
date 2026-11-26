@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="es">
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            http-equiv="Content-Security-Policy"
+            content="default-src 'none'; img-src data:; style-src 'unsafe-inline'"
+        />
+        <title>Hostal Rincón</title>
+        <style>
+            :root {
+                color-scheme: light dark;
+                font:
+                    15px system-ui,
+                    sans-serif;
+            }
+            body {
+                margin: 0;
+                background: light-dark(#f5f9fb, #101e27);
+                color: light-dark(#152b39, #edf5fa);
+            }
+            main {
+                display: grid;
+                grid-template-columns: 155px 1fr;
+                align-items: center;
+                min-height: 310px;
+            }
+            .brand {
+                display: grid;
+                justify-items: center;
+                gap: 12px;
+            }
+            .brand img {
+                width: 76px;
+                height: 76px;
+            }
+            .brand h1 {
+                margin: 0;
+                font-size: 16px;
+            }
+            section {
+                border-left: 1px solid light-dark(#d4e2e9, #314652);
+                padding: 10px 22px;
+            }
+            h2 {
+                margin: 0 0 20px;
+                font-size: 17px;
+            }
+            ol {
+                padding: 0;
+                margin: 0;
+                list-style: none;
+                display: grid;
+                gap: 12px;
+            }
+            li {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                color: light-dark(#496778, #b5c7d3);
+            }
+            .indicator {
+                display: block;
+                flex: 0 0 14px;
+                height: 14px;
+                box-sizing: border-box;
+                border: 2px solid currentColor;
+                border-radius: 50%;
+            }
+            li[aria-current='step'] {
+                color: light-dark(#10314d, #bde9ff);
+                font-weight: 650;
+            }
+            li[aria-current='step'] .indicator {
+                border-color: light-dark(#bbd3e0, #496778);
+                border-top-color: currentColor;
+                border-right-color: currentColor;
+                animation: spin 0.7s linear infinite;
+            }
+            li.done .indicator {
+                background: currentColor;
+            }
+            @keyframes spin {
+                to {
+                    transform: rotate(1turn);
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <main>
+            <div class="brand">
+                <img alt="" />
+                <h1>Hostal Rincón</h1>
+            </div>
+            <section aria-labelledby="startup-title">
+                <h2 id="startup-title">Preparando la aplicación</h2>
+                <ol aria-label="Progreso de inicio" aria-live="polite">
+                    <li aria-current="step">
+                        <span class="indicator" aria-hidden="true"></span
+                        ><span class="step-label"
+                            >Preparando la carpeta de datos</span
+                        >
+                    </li>
+                    <li>
+                        <span class="indicator" aria-hidden="true"></span
+                        ><span class="step-label"
+                            >Verificando la base de datos</span
+                        >
+                    </li>
+                    <li>
+                        <span class="indicator" aria-hidden="true"></span
+                        ><span class="step-label">Preparando las cachés</span>
+                    </li>
+                    <li>
+                        <span class="indicator" aria-hidden="true"></span
+                        ><span class="step-label"
+                            >Iniciando el servidor local</span
+                        >
+                    </li>
+                    <li>
+                        <span class="indicator" aria-hidden="true"></span
+                        ><span class="step-label">Abriendo la aplicación</span>
+                    </li>
+                </ol>
+            </section>
+        </main>
+    </body>
+</html>
