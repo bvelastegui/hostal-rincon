@@ -4,6 +4,11 @@ El proyecto usa versionamiento semántico (`MAJOR.MINOR.PATCH`). Incrementa `MAJ
 
 Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la fecha en formato `AAAA-MM-DD` y etiqueta el commit de la entrega con `vMAJOR.MINOR.PATCH`.
 
+## 0.10.5 (prevista)
+
+- El encabezado de escritorio reúne el logo y dos grupos de navegación en una sola cinta. Las opciones muestran iconos de 24 px sobre el texto y separan los módulos de **Ajustes** y **Cambiar de sesión**.
+- La barra de estado muestra el usuario, la versión y el estado del turno, con un enlace para consultar la caja. En escritorio se fija al pie y en móvil aparece arriba y se desplaza con la página.
+
 ## 0.10.4 (prevista)
 
 - En escritorio, el inicio de sesión usa el nombre de usuario. La configuración inicial y la gestión de cuentas permiten trabajar sin correo electrónico.
