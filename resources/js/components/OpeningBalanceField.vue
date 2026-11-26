@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 defineProps<{
     id: string;
     name?: string;
+    label?: string;
     balanceCents?: number | null;
     error?: string;
     disabled?: boolean;
@@ -19,7 +20,7 @@ defineProps<{
 
 <template>
     <Field :data-invalid="!!error" :data-disabled="disabled">
-        <FieldLabel :for="id">Saldo inicial (USD)</FieldLabel>
+        <FieldLabel :for="id">{{ label ?? 'Saldo inicial (USD)' }}</FieldLabel>
         <Input
             :id="id"
             :name="name ?? 'opening_balance'"

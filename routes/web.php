@@ -55,6 +55,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('empleados', [AdvanceController::class, 'storeEmployee'])->name('employees.store');
         Route::get('empleados/{employee}/editar', [AdvanceController::class, 'editEmployee'])->name('employees.edit');
         Route::put('empleados/{employee}', [AdvanceController::class, 'updateEmployee'])->name('employees.update');
+        Route::get('historial/{advance}/corregir', [AdvanceController::class, 'correction'])->name('correction');
+        Route::post('historial/{advance}/corregir', [AdvanceController::class, 'replace'])->name('replace');
         Route::get('{employee}/nuevo', [AdvanceController::class, 'create'])->name('create');
         Route::post('{employee}', [AdvanceController::class, 'store'])->name('store');
         Route::post('{employee}/descuento', [AdvanceController::class, 'deduct'])->name('deduct');

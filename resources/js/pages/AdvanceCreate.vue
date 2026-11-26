@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed } from 'vue';
-import { index, store } from '@/actions/App/Http/Controllers/AdvanceController';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { computed, watch } from 'vue';
+import {
+    index,
+    replace,
+    store,
+} from '@/actions/App/Http/Controllers/AdvanceController';
+import HighlightedAmountField from '@/components/HighlightedAmountField.vue';
 import InputError from '@/components/InputError.vue';
 import SelectField from '@/components/SelectField.vue';
 import { Button } from '@/components/ui/button';
@@ -14,7 +19,7 @@ import {
     FieldLabel,
 } from '@/components/ui/field';
 import { paymentOptions } from '@/lib/cash-movement';
-import { formatUsd } from '@/lib/money';
+import { formatUsd, parseUsdCents } from '@/lib/money';
 
 const props = defineProps<{
     employee: { id: number; name: string };
@@ -23,6 +28,14 @@ const props = defineProps<{
     requestToken: string;
     cashBalanceCents: number | null;
     bankAccounts: { id: number; name: string; balanceCents: number }[];
+    replacement: {
+        id: number;
+        amountCents: number;
+        note: string | null;
+        paymentMethod: 'cash' | 'transfer' | null;
+        accountId: number | null;
+        voucher: string | null;
+    } | null;
 }>();
 
 defineOptions({
@@ -32,13 +45,21 @@ defineOptions({
 const employeeCapacity = computed(() =>
     Math.max(0, props.limitCents - props.pendingCents),
 );
+const title = props.replacement ? 'Corregir adelanto' : 'Registrar adelanto';
+const originalAmount = props.replacement?.amountCents;
 const form = useForm({
-    amount: '',
-    note: '',
+    amount:
+        originalAmount == null
+            ? ''
+            : (originalAmount / 100).toFixed(2).replace('.', ','),
+    note: props.replacement?.note ?? '',
+    void_reason: '',
     request_id: props.requestToken,
-    payment_method: 'cash',
-    bank_account_id: '',
-    voucher: '',
+    payment_method: props.replacement?.paymentMethod ?? '',
+    bank_account_id: props.replacement?.accountId
+        ? String(props.replacement.accountId)
+        : '',
+    voucher: props.replacement?.voucher ?? '',
 });
 const isTransfer = computed(() => form.payment_method === 'transfer');
 const bankOptions = computed(() =>
@@ -48,6 +69,10 @@ const bankOptions = computed(() =>
     })),
 );
 const sourceBalance = computed(() => {
+    if (!form.payment_method) {
+        return null;
+    }
+
     const cents = isTransfer.value
         ? props.bankAccounts.find(
               ({ id }) => String(id) === form.bank_account_id,
@@ -59,7 +84,49 @@ const sourceBalance = computed(() => {
 const maximum = computed(() =>
     Math.min(employeeCapacity.value, sourceBalance.value ?? 0),
 );
-const cannotSubmit = computed(() => form.processing || maximum.value === 0);
+const normalizedAmount = computed(() => form.amount.trim().replace(',', '.'));
+const amountCents = computed(() => parseUsdCents(form.amount));
+const amountLabel = computed(() =>
+    amountCents.value !== null && amountCents.value > 0
+        ? formatUsd(amountCents.value)
+        : null,
+);
+const limitError = computed(() => {
+    if (
+        amountCents.value === null ||
+        sourceBalance.value === null ||
+        amountCents.value <= maximum.value
+    ) {
+        return null;
+    }
+
+    if (amountCents.value > sourceBalance.value) {
+        const source = isTransfer.value ? 'la cuenta seleccionada' : 'caja';
+        return 'El monto supera el saldo disponible en ' + source + '.';
+    }
+
+    return 'El monto supera el cupo disponible del empleado.';
+});
+const amountError = computed(() => limitError.value ?? form.errors.amount);
+watch([() => form.payment_method, () => form.bank_account_id], () =>
+    form.clearErrors('amount'),
+);
+const submitLabel = computed(() => {
+    const action = props.replacement
+        ? 'Confirmar corrección'
+        : 'Registrar adelanto';
+    return amountLabel.value ? action + ' · ' + amountLabel.value : action;
+});
+const cannotSubmit = computed(
+    () => form.processing || maximum.value === 0 || limitError.value !== null,
+);
+const page = usePage();
+const submitError = computed(
+    () =>
+        page.props.errors.advance ??
+        page.props.errors.movement ??
+        form.errors.request_id,
+);
 
 function submit(): void {
     if (cannotSubmit.value) {
@@ -68,27 +135,54 @@ function submit(): void {
 
     form.transform((data) => ({
         ...data,
-        amount: data.amount.trim().replace(',', '.'),
-    })).submit(store(props.employee.id));
+        amount: normalizedAmount.value,
+    })).submit(
+        props.replacement
+            ? replace(props.replacement.id)
+            : store(props.employee.id),
+    );
 }
 </script>
 
 <template>
     <div class="flex flex-1 flex-col gap-6">
-        <Head title="Registrar adelanto" />
+        <Head :title="title" />
 
         <header class="space-y-1">
             <h1 class="text-2xl font-semibold tracking-tight">
-                Registrar adelanto
+                {{ title }}
             </h1>
             <p class="break-words text-muted-foreground">{{ employee.name }}</p>
         </header>
 
-        <dl class="grid grid-cols-2 gap-3 rounded-lg border p-4 text-sm">
+        <p v-if="replacement" class="text-sm text-muted-foreground">
+            Importe original:
+            <strong class="text-foreground">{{
+                formatUsd(replacement.amountCents)
+            }}</strong
+            >. Al guardar se anula el registro original y queda el motivo de la
+            corrección en el historial.
+        </p>
+
+        <dl
+            class="grid grid-cols-2 gap-3 rounded-lg border p-4 text-sm sm:grid-cols-3"
+        >
             <div>
-                <dt class="text-muted-foreground">Pendiente de descuento</dt>
+                <dt class="text-muted-foreground">
+                    {{
+                        replacement
+                            ? 'Otros adelantos pendientes'
+                            : 'Pendiente de descuento'
+                    }}
+                </dt>
                 <dd class="text-lg font-semibold tabular-nums">
                     {{ formatUsd(pendingCents) }}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-muted-foreground">Límite del empleado</dt>
+                <dd class="text-lg font-semibold tabular-nums">
+                    {{ formatUsd(limitCents) }}
                 </dd>
             </div>
             <div>
@@ -105,42 +199,6 @@ function submit(): void {
             @submit.prevent="submit"
         >
             <FieldGroup class="gap-5">
-                <Field :data-invalid="!!form.errors.amount">
-                    <FieldLabel for="advance-amount">Monto en USD</FieldLabel>
-                    <Input
-                        id="advance-amount"
-                        v-model="form.amount"
-                        inputmode="decimal"
-                        required
-                        class="min-h-11 text-base"
-                        :aria-invalid="Boolean(form.errors.amount)"
-                        :aria-describedby="
-                            form.errors.amount
-                                ? 'advance-available advance-amount-error'
-                                : 'advance-available'
-                        "
-                    />
-                    <FieldDescription id="advance-available">
-                        <template v-if="sourceBalance !== null">
-                            Saldo disponible
-                            {{ isTransfer ? 'en la cuenta' : 'en caja' }}:
-                            {{ formatUsd(sourceBalance) }}. Máximo para este
-                            adelanto: {{ formatUsd(maximum) }}.
-                        </template>
-                        <template v-else-if="isTransfer">
-                            Selecciona la cuenta de origen para ver su saldo.
-                        </template>
-                        <template v-else>
-                            Configura el saldo inicial de efectivo para
-                            registrar adelantos en caja.
-                        </template>
-                    </FieldDescription>
-                    <FieldError
-                        v-if="form.errors.amount"
-                        id="advance-amount-error"
-                        >{{ form.errors.amount }}</FieldError
-                    >
-                </Field>
                 <SelectField
                     v-model="form.payment_method"
                     name="advance-payment-method"
@@ -149,20 +207,68 @@ function submit(): void {
                     :options="paymentOptions"
                     :error="form.errors.payment_method"
                 />
+                <SelectField
+                    v-if="isTransfer && bankOptions.length"
+                    v-model="form.bank_account_id"
+                    name="advance-bank-account"
+                    label="Cuenta bancaria de origen"
+                    placeholder="Selecciona la cuenta bancaria"
+                    :options="bankOptions"
+                    :error="form.errors.bank_account_id"
+                />
+                <HighlightedAmountField
+                    id="advance-amount"
+                    v-model="form.amount"
+                    :label="
+                        replacement ? 'Monto corregido' : 'Monto del adelanto'
+                    "
+                    :error="amountError"
+                    :alert-error="!!limitError"
+                    :disabled="sourceBalance === null"
+                    @update:model-value="form.clearErrors('amount')"
+                >
+                    <template #context>
+                        <dl
+                            v-if="sourceBalance !== null"
+                            class="grid grid-cols-2 gap-3 text-sm"
+                        >
+                            <div>
+                                <dt class="text-muted-foreground">
+                                    {{
+                                        isTransfer
+                                            ? 'Disponible en cuenta'
+                                            : 'Disponible en caja'
+                                    }}
+                                </dt>
+                                <dd class="text-lg font-semibold tabular-nums">
+                                    {{ formatUsd(sourceBalance) }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-muted-foreground">
+                                    Máximo para este adelanto
+                                </dt>
+                                <dd
+                                    class="text-lg font-semibold text-primary tabular-nums"
+                                >
+                                    {{ formatUsd(maximum) }}
+                                </dd>
+                            </div>
+                        </dl>
+                        <FieldDescription v-else>
+                            {{
+                                !form.payment_method
+                                    ? 'Elige la forma de pago para conocer el máximo antes de ingresar el monto.'
+                                    : isTransfer
+                                      ? bankOptions.length
+                                          ? 'Selecciona la cuenta de origen para ver su saldo.'
+                                          : 'Configura una cuenta de un banco activo para registrar transferencias.'
+                                      : 'Configura el saldo inicial de efectivo para registrar adelantos en caja.'
+                            }}
+                        </FieldDescription>
+                    </template>
+                </HighlightedAmountField>
                 <template v-if="isTransfer">
-                    <SelectField
-                        v-if="bankOptions.length"
-                        v-model="form.bank_account_id"
-                        name="advance-bank-account"
-                        label="Cuenta bancaria de origen"
-                        placeholder="Selecciona la cuenta bancaria"
-                        :options="bankOptions"
-                        :error="form.errors.bank_account_id"
-                    />
-                    <p v-else class="text-sm text-muted-foreground">
-                        Configura una cuenta de un banco activo para registrar
-                        transferencias.
-                    </p>
                     <Field
                         v-if="bankOptions.length"
                         :data-invalid="!!form.errors.voucher"
@@ -191,6 +297,25 @@ function submit(): void {
                         </FieldError>
                     </Field>
                 </template>
+                <Field
+                    v-if="replacement"
+                    :data-invalid="!!form.errors.void_reason"
+                >
+                    <FieldLabel for="advance-reason"
+                        >Motivo de la corrección</FieldLabel
+                    >
+                    <Input
+                        id="advance-reason"
+                        v-model="form.void_reason"
+                        required
+                        maxlength="255"
+                        class="min-h-11"
+                        :aria-invalid="!!form.errors.void_reason"
+                    />
+                    <FieldError v-if="form.errors.void_reason">{{
+                        form.errors.void_reason
+                    }}</FieldError>
+                </Field>
                 <Field :data-invalid="!!form.errors.note">
                     <FieldLabel for="advance-note"
                         >Observación opcional</FieldLabel
@@ -207,23 +332,24 @@ function submit(): void {
                     }}</FieldError>
                 </Field>
             </FieldGroup>
-            <InputError :message="form.errors.request_id" />
+            <InputError :message="submitError" />
 
             <div class="mt-auto grid gap-2 sm:mt-2 sm:flex sm:justify-end">
                 <Button as-child variant="outline" class="min-h-11">
                     <Link :href="index()">Cancelar</Link>
                 </Button>
                 <Button type="submit" class="min-h-11" :disabled="cannotSubmit">
-                    {{
-                        form.processing ? 'Registrando…' : 'Registrar adelanto'
-                    }}
+                    {{ form.processing ? 'Guardando…' : submitLabel }}
                 </Button>
             </div>
         </form>
         <div v-else class="space-y-3">
             <p class="text-sm">
-                Límite alcanzado. Registra el descuento completo para habilitar
-                nuevos adelantos.
+                {{
+                    limitCents === 0
+                        ? 'Los adelantos están deshabilitados. Edita el límite del empleado para habilitarlos.'
+                        : 'Sin cupo disponible. Registra el descuento completo o aumenta el límite.'
+                }}
             </p>
             <Button
                 as-child

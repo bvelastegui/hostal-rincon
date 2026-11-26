@@ -18,6 +18,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $username
  * @property string|null $email
  * @property Carbon|null $email_verified_at
+ * @property int $advance_limit_cents
  * @property bool $is_admin
  * @property string $password
  * @property string|null $two_factor_secret
@@ -28,11 +29,13 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  */
 #[Fillable(['name', 'email', 'username', 'password'])]
-#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
+#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token', 'advance_limit_cents'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    public const int DEFAULT_ADVANCE_LIMIT_CENTS = 30_000;
 
     protected $attributes = [
         'is_admin' => false,
@@ -59,6 +62,11 @@ class User extends Authenticatable
         return $advances;
     }
 
+    public function remainingAdvanceCents(int $pendingCents): int
+    {
+        return max(0, $this->advance_limit_cents - $pendingCents);
+    }
+
     /**
      * Get the attributes that should be cast.
      *
@@ -70,6 +78,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'advance_limit_cents' => 'integer',
         ];
     }
 }

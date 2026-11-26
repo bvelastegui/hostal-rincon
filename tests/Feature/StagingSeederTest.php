@@ -58,7 +58,8 @@ test('carga la operación completa de staging una sola vez con credenciales sepa
     expect($advances->pluck('issued_on')->map(fn ($date) => $date->format('Y-m'))->unique()->count())
         ->toBeGreaterThanOrEqual(2);
     expect($advances->whereNull('deducted_at')->groupBy('employee_id')->map->sum('amount_cents')->values()->all())
-        ->toEqualCanonicalizing([29_999, 30_000]);
+        ->toEqualCanonicalizing([29_999, 25_000]);
+    expect(User::query()->where('email', 'diana@hostal.test')->sole()->advance_limit_cents)->toBe(25_000);
 
     $currentMovements = CashMovement::query()->where('cash_shift_id', CashShift::active()->id)->get();
     expect($currentMovements->where('is_sensitive', true)->pluck('kind')->unique()->values()->all())

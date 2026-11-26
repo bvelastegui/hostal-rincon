@@ -94,7 +94,7 @@ class MonthlyReportController extends Controller
     /** @return Builder<Advance> */
     private function advancesForReport(CarbonImmutable $month): Builder
     {
-        return Advance::query()->where(fn (Builder $query) => $query
+        return Advance::query()->effective()->where(fn (Builder $query) => $query
             ->whereBetween('advances.issued_on', [$month->toDateString(), $month->endOfMonth()->toDateTimeString()])
             ->orWhereBetween('advances.deducted_at', [$month->utc()->toDateTimeString(), $month->endOfMonth()->utc()->toDateTimeString()])
             ->orWhereNull('advances.deducted_at'));

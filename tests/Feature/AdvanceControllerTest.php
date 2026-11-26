@@ -43,6 +43,84 @@ test('permite llegar a 300 y no duplica el registro al reenviar la solicitud', f
     );
 });
 
+test('aplica el límite individual aunque otro empleado tenga más cupo', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $employee = User::factory()->create(['advance_limit_cents' => 12_550]);
+    $other = User::factory()->create(['advance_limit_cents' => 45_000]);
+    Advance::factory()->for($employee, 'employee')->create(['amount_cents' => 10_000, 'issued_on' => '2026-10-31']);
+    CashOpening::query()->update(['opening_balance_cents' => 60_000]);
+    $this->withoutVite()->actingAs($admin);
+
+    $this->get(route('advances.index'))->assertInertia(fn (Assert $page) => $page
+        ->where('employees', fn ($employees) => collect($employees)->pluck('limitCents', 'id')->sortKeys()->all() === [
+            $employee->id => 12_550,
+            $other->id => 45_000,
+        ]));
+    $this->get(route('advances.create', $employee))->assertInertia(fn (Assert $page) => $page
+        ->where('limitCents', 12_550)->where('pendingCents', 10_000));
+
+    $record = fn (User $recipient, string $amount) => $this->post(route('advances.store', $recipient), [
+        'request_id' => (string) Str::uuid(),
+        'amount' => $amount,
+        'payment_method' => 'cash',
+    ]);
+
+    $record($employee, '25.51')->assertSessionHasErrors(['amount' => 'El monto supera el disponible de USD 25,50.']);
+    $record($employee, '25.50')->assertRedirectToRoute('advances.index')->assertSessionHasNoErrors();
+    $record($other, '350.00')->assertRedirectToRoute('advances.index')->assertSessionHasNoErrors();
+
+    $data = ['name' => $employee->name, 'email' => $employee->email];
+    $edit = route('advances.employees.update', $employee);
+    $this->put($edit, [...$data, 'advance_limit' => '100,00'])->assertSessionHasNoErrors();
+    $this->put($edit, [...$data, 'name' => 'Nombre corregido'])->assertSessionHasNoErrors();
+    expect($employee->refresh()->advance_limit_cents)->toBe(10_000)
+        ->and((int) $employee->pendingAdvances()->sum('amount_cents'))->toBe(12_550);
+    $record($employee, '0.01')->assertSessionHasErrors(['amount' => 'El monto supera el disponible de USD 0,00.']);
+
+    $this->post(route('advances.deduct', $employee), [
+        'latest_pending_id' => $employee->pendingAdvances()->max('id'),
+    ])->assertSessionHasNoErrors();
+    expect($employee->refresh()->advance_limit_cents)->toBe(10_000);
+    $record($employee, '100.00')->assertSessionHasNoErrors();
+
+    $this->put($edit, [...$data, 'advance_limit' => '0'])->assertSessionHasNoErrors();
+    $this->post(route('advances.deduct', $employee), [
+        'latest_pending_id' => $employee->pendingAdvances()->max('id'),
+    ])->assertSessionHasNoErrors();
+    $record($employee, '0.01')->assertSessionHasErrors(['amount' => 'El monto supera el disponible de USD 0,00.']);
+    expect($employee->refresh()->advance_limit_cents)->toBe(0);
+});
+
+test('Administración valida y guarda el límite al crear un empleado', function () {
+    $this->withoutVite()->actingAs(User::factory()->create(['is_admin' => true]));
+    $this->get(route('advances.employees.create'))->assertInertia(fn (Assert $page) => $page
+        ->component('AdvanceEmployeeForm')->where('limitCents', 30_000));
+
+    $data = [
+        'name' => 'Ana Recepción',
+        'email' => 'ana.limite@example.test',
+        'password' => 'Prueba123!',
+        'password_confirmation' => 'Prueba123!',
+    ];
+
+    foreach (['', '-1', '1,001', '1e2', '1000000000'] as $invalid) {
+        $this->post(route('advances.employees.store'), [...$data, 'advance_limit' => $invalid])
+            ->assertSessionHasErrors('advance_limit');
+    }
+
+    $this->post(route('advances.employees.store'), [...$data, 'advance_limit' => '420,75'])
+        ->assertRedirectToRoute('advances.index')->assertSessionHasNoErrors();
+    $employee = User::query()->where('email', $data['email'])->sole();
+    expect($employee->advance_limit_cents)->toBe(42_075);
+    $this->get(route('advances.employees.edit', $employee))->assertInertia(fn (Assert $page) => $page
+        ->where('limitCents', 42_075));
+
+    $this->actingAs($employee)->put(route('advances.employees.update', $employee), [
+        'advance_limit' => '9999',
+    ])->assertForbidden();
+    expect($employee->refresh()->advance_limit_cents)->toBe(42_075);
+});
+
 test('rechaza adelantos que exceden el tope o tienen precisión inválida', function (int $pending, string $amount) {
     $employee = User::factory()->create();
     Advance::factory()->for($employee, 'employee')->create(['amount_cents' => $pending]);

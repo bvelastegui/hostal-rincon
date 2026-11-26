@@ -7,6 +7,7 @@ import {
     updateEmployee,
 } from '@/actions/App/Http/Controllers/AdvanceController';
 import AccountIdentifierField from '@/components/AccountIdentifierField.vue';
+import OpeningBalanceField from '@/components/OpeningBalanceField.vue';
 import { Button } from '@/components/ui/button';
 import {
     Field,
@@ -24,6 +25,7 @@ const props = defineProps<{
         email: string | null;
         username: string | null;
     } | null;
+    limitCents: number;
 }>();
 
 const loginField = usePage().props.auth.loginField;
@@ -78,6 +80,15 @@ defineOptions({
                     "
                     :value="employee?.[loginField]"
                     :error="errors[loginField]"
+                />
+
+                <OpeningBalanceField
+                    id="employee-advance-limit"
+                    name="advance_limit"
+                    label="Límite máximo de adelantos (USD)"
+                    :balance-cents="limitCents"
+                    :error="errors.advance_limit"
+                    description="Es el máximo que puede quedar pendiente antes del descuento. Usa 0,00 para bloquear nuevos adelantos."
                 />
 
                 <Field :data-invalid="!!errors.password">
