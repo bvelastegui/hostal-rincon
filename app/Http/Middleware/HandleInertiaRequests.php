@@ -41,7 +41,9 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
         Inertia::encryptHistory($user !== null);
-        $activeShift = $user?->is_admin ? CashShift::active() : null;
+        $activeShift = $user?->is_admin
+            ? CashShift::active()
+            : $request->attributes->get('activeCashShift');
 
         return [
             ...parent::share($request),

@@ -283,7 +283,8 @@ test('durante un turno los empleados solo pueden usar las funciones de caja que 
     $this->get(route('movements.index'))->assertRedirectToRoute('cash-closings.index');
     $this->get(route('cash-closings.index'))->assertInertia(fn (Assert $page) => $page
         ->where('auth.cashShiftAccess', 'restricted')
-        ->where('auth.activeCashShift', null));
+        ->where('auth.activeCashShift.responsible', $owner->name)
+        ->where('auth.activeCashShift.awaitingReceipt', false));
     $this->post(route('logout'))->assertRedirect();
     $this->assertGuest();
 
