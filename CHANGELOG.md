@@ -4,7 +4,7 @@ El proyecto usa versionamiento semántico (`MAJOR.MINOR.PATCH`). Incrementa `MAJ
 
 Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la fecha en formato `AAAA-MM-DD` y etiqueta el commit de la entrega con `vMAJOR.MINOR.PATCH`.
 
-## 0.11.1 (prevista)
+## 1.0.0 — 2026-11-26
 
 - Administración puede configurar el límite de adelantos de cada empleado. Las cuentas existentes parten de USD 300. Si el límite baja por debajo del saldo pendiente, se bloquean nuevos adelantos hasta recuperar cupo. USD 0 deshabilita nuevos registros. [HR-13](https://nexodigital.youtrack.cloud/issue/HR-13)
 - La configuración inicial permite agregar empleados y configurar su límite de adelantos en un paso opcional.
