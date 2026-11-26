@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Form, Head, Link, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { Form, Head, Link, useHttp, usePage } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
 import CashMovementVoidReason from '@/components/CashMovementVoidReason.vue';
+import HighlightedAmountField from '@/components/HighlightedAmountField.vue';
 import SelectField from '@/components/SelectField.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -25,9 +26,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { paymentOptions } from '@/lib/cash-movement';
-import { formatUsd } from '@/lib/money';
+import { formatUsd, parseUsdCents } from '@/lib/money';
 import {
     annul,
+    checkBankFunds,
     index,
     replace,
     returnToCash,
@@ -58,7 +60,8 @@ const props = defineProps<{
         isSensitive: boolean;
     } | null;
     depositCashCents?: number | null;
-    banks: { id: number; name: string }[];
+    expenseCashCents?: number | null;
+    banks: { id: number; name: string; balanceCents?: number }[];
     originBanks: { id: number; name: string }[];
     responsibleUsers: { id: number; name: string }[];
 }>();
@@ -68,7 +71,9 @@ defineOptions({
 });
 
 const page = usePage();
+const amount = ref(props.replacement?.amount ?? '');
 const method = ref<string>(props.replacement?.paymentMethod ?? 'cash');
+const accountId = ref(props.replacement?.accountId?.toString() ?? '');
 const isDeposit = computed(() => props.kind === 'deposit');
 const isExpense = computed(() => props.kind === 'expense');
 const isTransfer = computed(
@@ -86,6 +91,136 @@ const selectAccount = computed(
         confirmedDepositReplacement.value ||
         (props.movement === null && isTransfer.value),
 );
+const needsFunds = computed(
+    () => !props.movement && (isDeposit.value || isExpense.value),
+);
+const selectedBank = computed(() =>
+    props.banks.find((bank) => String(bank.id) === accountId.value),
+);
+const availableCents = computed(() => {
+    if (!needsFunds.value) {
+        return null;
+    }
+
+    const balance = isDeposit.value
+        ? props.depositCashCents
+        : isTransfer.value
+          ? selectedBank.value?.balanceCents
+          : props.expenseCashCents;
+
+    return balance == null ? null : Math.max(0, balance);
+});
+const enteredCents = computed(() => parseUsdCents(amount.value));
+const requiresBankCheck = computed(
+    () =>
+        needsFunds.value &&
+        isExpense.value &&
+        isTransfer.value &&
+        selectedBank.value !== undefined &&
+        selectedBank.value.balanceCents === undefined,
+);
+const bankCheckKey = computed(() =>
+    requiresBankCheck.value &&
+    enteredCents.value !== null &&
+    enteredCents.value > 0
+        ? accountId.value + ':' + enteredCents.value
+        : null,
+);
+const fundsCheck = useHttp({ amount: '', bank_account_id: '' });
+const bankCheckResult = ref<{ key: string; error: string | null } | null>(null);
+
+watch(
+    bankCheckKey,
+    (key, _, onCleanup) => {
+        bankCheckResult.value = null;
+        if (key === null) {
+            return;
+        }
+
+        let active = true;
+        const timer = setTimeout(() => {
+            fundsCheck.clearErrors();
+            fundsCheck.amount = amount.value;
+            fundsCheck.bank_account_id = accountId.value;
+            void fundsCheck.submit(checkBankFunds()).then(
+                () => {
+                    if (active) bankCheckResult.value = { key, error: null };
+                },
+                () => {
+                    if (active) {
+                        bankCheckResult.value = {
+                            key,
+                            error:
+                                fundsCheck.errors.amount ??
+                                fundsCheck.errors.bank_account_id ??
+                                'No se pudo verificar el saldo bancario. Revisa el monto o la cuenta e inténtalo de nuevo.',
+                        };
+                    }
+                },
+            );
+        }, 250);
+
+        onCleanup(() => {
+            active = false;
+            clearTimeout(timer);
+            fundsCheck.cancel();
+        });
+    },
+    { immediate: true },
+);
+
+const checkingBankFunds = computed(
+    () =>
+        bankCheckKey.value !== null &&
+        bankCheckResult.value?.key !== bankCheckKey.value,
+);
+const fundsError = computed(() => {
+    if (
+        bankCheckKey.value !== null &&
+        bankCheckResult.value?.key === bankCheckKey.value
+    ) {
+        return bankCheckResult.value.error;
+    }
+
+    if (
+        enteredCents.value === null ||
+        availableCents.value === null ||
+        enteredCents.value <= availableCents.value
+    ) {
+        return null;
+    }
+
+    const source =
+        isExpense.value && isTransfer.value ? 'la cuenta seleccionada' : 'caja';
+    return 'El monto supera el saldo disponible en ' + source + '.';
+});
+const amountBlocked = computed(
+    () =>
+        needsFunds.value &&
+        (!!fundsError.value ||
+            checkingBankFunds.value ||
+            (availableCents.value === null && !requiresBankCheck.value)),
+);
+const fundsHint = computed(() => {
+    if (!(isExpense.value && isTransfer.value)) {
+        return 'Configura el saldo inicial de efectivo para registrar este movimiento.';
+    }
+    if (!selectedBank.value) {
+        return props.banks.length
+            ? 'Selecciona la cuenta de origen para comprobar la disponibilidad.'
+            : 'Configura una cuenta de un banco activo para registrar el egreso.';
+    }
+    if (checkingBankFunds.value) {
+        return 'Verificando disponibilidad…';
+    }
+    if (
+        bankCheckResult.value?.key === bankCheckKey.value &&
+        bankCheckResult.value?.error === null
+    ) {
+        return 'Monto dentro del saldo disponible.';
+    }
+    return 'El saldo se comprueba al ingresar el monto.';
+});
 const canConfirmOnSave = computed(
     () => !props.movement && props.kind === 'income' && isTransfer.value,
 );
@@ -148,7 +283,7 @@ const userOptions = computed(() =>
 </script>
 
 <template>
-    <section class="flex w-full max-w-xl flex-col gap-5 lg:mx-auto">
+    <section class="flex w-full flex-1 flex-col gap-6">
         <Head :title="title" />
         <h1 class="text-2xl font-semibold tracking-tight">{{ title }}</h1>
 
@@ -167,7 +302,7 @@ const userOptions = computed(() =>
 
         <dl
             v-if="movement"
-            class="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-y py-3 text-sm"
+            class="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-lg border border-primary/25 bg-primary/5 p-4 text-sm"
         >
             <div class="min-w-0">
                 <dt class="text-muted-foreground">
@@ -204,8 +339,10 @@ const userOptions = computed(() =>
                 </dd>
             </div>
             <div class="text-right">
-                <dt class="text-muted-foreground">Monto</dt>
-                <dd class="font-semibold whitespace-nowrap tabular-nums">
+                <dt class="text-muted-foreground">Monto (USD)</dt>
+                <dd
+                    class="text-2xl font-semibold whitespace-nowrap tabular-nums sm:text-3xl"
+                >
                     {{ formatUsd(movement.amountCents) }}
                 </dd>
             </div>
@@ -213,13 +350,48 @@ const userOptions = computed(() =>
 
         <Form
             v-bind="action"
-            v-slot="{ errors, processing }"
+            v-slot="{ errors, processing, clearErrors }"
+            :on-before="() => !amountBlocked"
             error-bag="movementForm"
         >
             <FieldGroup class="gap-4">
                 <template v-if="!movement">
                     <input type="hidden" name="request_id" :value="requestId" />
                     <input type="hidden" name="kind" :value="kind" />
+
+                    <HighlightedAmountField
+                        id="amount"
+                        v-model="amount"
+                        name="amount"
+                        :label="
+                            {
+                                income: 'Monto del ingreso',
+                                expense: 'Monto del egreso',
+                                deposit: 'Monto del depósito',
+                            }[kind]
+                        "
+                        :error="fundsError ?? errors.amount"
+                        :alert-error="!!fundsError"
+                        @update:model-value="clearErrors('amount')"
+                    >
+                        <template v-if="needsFunds" #context>
+                            <dl v-if="availableCents !== null" class="text-sm">
+                                <dt class="text-muted-foreground">
+                                    {{
+                                        isExpense && isTransfer
+                                            ? 'Saldo disponible en la cuenta de origen'
+                                            : 'Efectivo disponible en caja'
+                                    }}
+                                </dt>
+                                <dd class="text-lg font-semibold tabular-nums">
+                                    {{ formatUsd(availableCents) }}
+                                </dd>
+                            </dl>
+                            <FieldDescription v-else aria-live="polite">{{
+                                fundsHint
+                            }}</FieldDescription>
+                        </template>
+                    </HighlightedAmountField>
 
                     <Field
                         v-if="!isDeposit"
@@ -247,40 +419,40 @@ const userOptions = computed(() =>
                         >
                     </Field>
 
-                    <Field :data-invalid="!!errors.amount">
-                        <FieldLabel for="amount">Monto (USD)</FieldLabel>
-                        <Input
-                            id="amount"
-                            name="amount"
-                            class="min-h-11"
-                            :default-value="replacement?.amount"
-                            inputmode="decimal"
-                            placeholder="0,00"
-                            :aria-invalid="!!errors.amount"
+                    <Field
+                        v-if="page.props.auth.canManageMovementSensitivity"
+                        orientation="horizontal"
+                        :data-invalid="!!errors.is_sensitive"
+                    >
+                        <Checkbox
+                            id="movement-sensitive"
+                            name="is_sensitive"
+                            value="1"
+                            :default-value="replacement?.isSensitive"
+                            :aria-invalid="!!errors.is_sensitive"
                             :aria-describedby="
-                                [
-                                    isDeposit ? 'deposit-cash' : null,
-                                    errors.amount ? 'amount-error' : null,
-                                ]
-                                    .filter(Boolean)
-                                    .join(' ') || undefined
+                                errors.is_sensitive
+                                    ? 'movement-sensitive-error'
+                                    : 'movement-sensitive-description'
                             "
-                            required
                         />
-                        <FieldDescription v-if="isDeposit" id="deposit-cash">
-                            {{
-                                depositCashCents == null
-                                    ? 'Configura el saldo inicial de efectivo para registrar un retiro.'
-                                    : (replacement
-                                          ? 'Efectivo disponible para el reemplazo: '
-                                          : 'Efectivo disponible en caja: ') +
-                                      formatUsd(Math.max(0, depositCashCents)) +
-                                      '.'
-                            }}
-                        </FieldDescription>
-                        <FieldError v-if="errors.amount" id="amount-error">{{
-                            errors.amount
-                        }}</FieldError>
+                        <div class="flex flex-col gap-1">
+                            <FieldLabel for="movement-sensitive"
+                                >Movimiento sensible</FieldLabel
+                            >
+                            <FieldDescription
+                                id="movement-sensitive-description"
+                            >
+                                El operador verá una descripción genérica, la
+                                fecha, el estado, la cuenta, el importe y quién
+                                lo registró.
+                            </FieldDescription>
+                            <FieldError
+                                v-if="errors.is_sensitive"
+                                id="movement-sensitive-error"
+                                >{{ errors.is_sensitive }}</FieldError
+                            >
+                        </div>
                     </Field>
 
                     <SelectField
@@ -297,7 +469,9 @@ const userOptions = computed(() =>
                         v-model="method"
                         name="payment_method"
                         :label="
-                            isExpense ? 'Origen del dinero' : 'Forma de pago'
+                            isExpense
+                                ? 'Forma de pago del egreso'
+                                : 'Forma de pago'
                         "
                         :placeholder="
                             isExpense
@@ -306,6 +480,7 @@ const userOptions = computed(() =>
                         "
                         :options="paymentOptions"
                         :error="errors.payment_method"
+                        @update:model-value="clearErrors('amount')"
                     />
                 </template>
 
@@ -324,53 +499,17 @@ const userOptions = computed(() =>
                     :error="errors.origin_bank_id"
                 />
 
-                <Field
-                    v-if="
-                        !movement &&
-                        page.props.auth.canManageMovementSensitivity
-                    "
-                    orientation="horizontal"
-                    :data-invalid="!!errors.is_sensitive"
-                >
-                    <Checkbox
-                        id="movement-sensitive"
-                        name="is_sensitive"
-                        value="1"
-                        :default-value="replacement?.isSensitive"
-                        :aria-invalid="!!errors.is_sensitive"
-                        :aria-describedby="
-                            errors.is_sensitive
-                                ? 'movement-sensitive-error'
-                                : 'movement-sensitive-description'
-                        "
-                    />
-                    <div class="flex flex-col gap-1">
-                        <FieldLabel for="movement-sensitive"
-                            >Movimiento sensible</FieldLabel
-                        >
-                        <FieldDescription id="movement-sensitive-description">
-                            El operador verá una descripción genérica, la fecha,
-                            el estado, la cuenta, el importe y quién lo
-                            registró.
-                        </FieldDescription>
-                        <FieldError
-                            v-if="errors.is_sensitive"
-                            id="movement-sensitive-error"
-                            >{{ errors.is_sensitive }}</FieldError
-                        >
-                    </div>
-                </Field>
-
                 <SelectField
                     v-if="selectAccount && banks.length"
+                    v-model="accountId"
                     name="bank_account_id"
                     :label="
                         isExpense ? 'Cuenta de origen' : 'Cuenta de destino'
                     "
                     placeholder="Selecciona la cuenta bancaria"
                     :options="bankOptions"
-                    :default-value="replacement?.accountId?.toString()"
                     :error="errors.bank_account_id"
+                    @update:model-value="clearErrors('amount')"
                 />
                 <p
                     v-else-if="selectAccount"
@@ -443,7 +582,9 @@ const userOptions = computed(() =>
                         :value="preferConfirmation ? '1' : '0'"
                         class="min-h-11 w-full sm:w-auto"
                         :disabled="
-                            processing || (selectAccount && !banks.length)
+                            processing ||
+                            amountBlocked ||
+                            (selectAccount && !banks.length)
                         "
                     >
                         {{ submitLabel }}

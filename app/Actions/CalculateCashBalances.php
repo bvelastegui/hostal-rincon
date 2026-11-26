@@ -73,7 +73,7 @@ final class CalculateCashBalances
         return $account->opening_balance_cents + $this->bankChange($totals);
     }
 
-    public function ensureFundsAvailable(int $amountCents, ?BankAccount $account): void
+    public function ensureFundsAvailable(int $amountCents, ?BankAccount $account, bool $revealBalance = true): void
     {
         $balanceCents = $account === null
             ? $this->handle(includeTransit: true)['cash']
@@ -87,7 +87,11 @@ final class CalculateCashBalances
             $available = number_format(max(0, $balanceCents) / 100, 2, ',', '.');
             $source = $account === null ? 'en caja' : 'en la cuenta seleccionada';
 
-            throw ValidationException::withMessages(['amount' => "El monto supera el saldo disponible {$source}: USD {$available}."]);
+            $message = $revealBalance
+                ? "El monto supera el saldo disponible {$source}: USD {$available}."
+                : "El monto supera el saldo disponible {$source}.";
+
+            throw ValidationException::withMessages(['amount' => $message]);
         }
     }
 

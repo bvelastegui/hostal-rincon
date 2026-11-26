@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\CalculateCashBalances;
 use App\Actions\ConfirmCashMovement;
+use App\Actions\ConvertUsdToCents;
 use App\Actions\CorrectCashMovement;
 use App\Actions\GroupCashMovementHistory;
 use App\Actions\PresentCashMovement;
@@ -19,6 +20,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -169,21 +171,42 @@ class CashMovementController extends Controller
             Gate::authorize('manage-deposits');
         }
 
-        return $this->newMovementForm($kind, $calculateCashBalances);
+        return $this->newMovementForm($kind, $calculateCashBalances, $request->user()->is_admin);
     }
 
-    public function correction(CashMovement $movement, CalculateCashBalances $balances): Response
+    public function correction(Request $request, CashMovement $movement, CalculateCashBalances $balances): Response
     {
         $shift = CashShift::active();
         $blocked = $this->corrections->blockedReason($movement, $shift, $this->corrections->lastClosing($shift));
         abort_if($blocked !== null, 403, $blocked ?? '');
 
-        return $this->newMovementForm($movement->kind, $balances, $movement);
+        return $this->newMovementForm($movement->kind, $balances, $request->user()->is_admin, $movement);
     }
 
-    private function newMovementForm(string $kind, CalculateCashBalances $balances, ?CashMovement $original = null): Response
+    private function newMovementForm(string $kind, CalculateCashBalances $balances, bool $isAdmin, ?CashMovement $original = null): Response
     {
-        $cash = $kind === 'deposit' ? $balances->handle(includeTransit: true)['cash'] : null;
+        $showBankBalances = $kind === 'expense' && $isAdmin;
+        $available = in_array($kind, ['expense', 'deposit'], true)
+            ? $balances->handle(includeTransit: true, includeAccounts: $showBankBalances)
+            : null;
+        $cash = $available['cash'] ?? null;
+        $banks = $kind !== 'deposit' || $original?->confirmed_at !== null ? $this->confirmation->bankAccounts() : [];
+
+        // El reemplazo se valida después de anular la salida anterior.
+        if ($cash !== null && $original !== null && ($kind === 'deposit' || $original->payment_method === 'cash')) {
+            $cash += $original->amount_cents;
+        }
+
+        if ($showBankBalances) {
+            $bankBalances = array_column($available['accounts'] ?? [], 'balanceCents', 'id');
+            if ($original?->bank_account_id !== null) {
+                $bankBalances[$original->bank_account_id] = ($bankBalances[$original->bank_account_id] ?? 0) + $original->amount_cents;
+            }
+            $banks = array_map(fn (array $bank): array => [
+                ...$bank,
+                'balanceCents' => $bankBalances[$bank['id']] ?? 0,
+            ], $banks);
+        }
 
         return Inertia::render('CashMovementForm', [
             'kind' => $kind,
@@ -202,8 +225,9 @@ class CashMovementController extends Controller
                 'confirmed' => $original->confirmed_at !== null,
                 'isSensitive' => $original->isSensitive(),
             ],
-            'depositCashCents' => $cash === null ? null : $cash + ($original->amount_cents ?? 0),
-            'banks' => $kind !== 'deposit' || $original?->confirmed_at !== null ? $this->confirmation->bankAccounts() : [],
+            'depositCashCents' => $kind === 'deposit' ? $cash : null,
+            'expenseCashCents' => $kind === 'expense' ? $cash : null,
+            'banks' => $banks,
             'originBanks' => $kind === 'income' ? Bank::query()->active()->orderBy('name')->get(['id', 'name']) : [],
             'responsibleUsers' => $kind === 'deposit' ? User::query()->orderBy('name')->get(['id', 'name']) : [],
         ]);
@@ -235,6 +259,24 @@ class CashMovementController extends Controller
             'originBanks' => [],
             'responsibleUsers' => [],
         ]);
+    }
+
+    public function checkBankFunds(Request $request, CalculateCashBalances $balances): HttpResponse
+    {
+        $this->authorizeMovement($request->user());
+        $request->merge(['amount' => ConvertUsdToCents::normalize($request->input('amount'))]);
+        $data = $request->validate([
+            'amount' => ['required', ...ConvertUsdToCents::OPENING_BALANCE_RULES, 'gt:0'],
+            'bank_account_id' => ['required', 'integer', 'exists:bank_accounts,id'],
+        ]);
+        $account = $this->confirmation->activeBankAccount((int) $data['bank_account_id']);
+        $balances->ensureFundsAvailable(
+            ConvertUsdToCents::fromDecimal((string) $data['amount']),
+            $account,
+            revealBalance: $request->user()->is_admin,
+        );
+
+        return response()->noContent();
     }
 
     public function replace(StoreCashMovementRequest $request, CalculateCashBalances $balances, CashMovement $movement): RedirectResponse
@@ -322,7 +364,7 @@ class CashMovementController extends Controller
                     : $this->confirmation->activeBankAccount($attributes['bank_account_id']);
 
                 if ($attributes['kind'] === 'expense') {
-                    $calculateCashBalances->ensureFundsAvailable($attributes['amount_cents'], $account);
+                    $calculateCashBalances->ensureFundsAvailable($attributes['amount_cents'], $account, revealBalance: $account === null || $user->is_admin);
                 }
 
                 if (isset($attributes['bank_id'])) {

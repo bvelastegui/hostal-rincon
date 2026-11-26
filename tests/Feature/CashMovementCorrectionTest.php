@@ -56,7 +56,8 @@ test('Administración reemplaza un egreso y conserva el movimiento original para
     $this->actingAs($admin)->get($correction)->assertInertia(fn (Assert $page) => $page
         ->component('CashMovementForm')
         ->where('replacement.id', $original->id)
-        ->where('replacement.amount', '40,00'));
+        ->where('replacement.amount', '40,00')
+        ->where('expenseCashCents', 10000));
     $this->post($replace, [...$replacement, 'void_reason' => ''])->assertSessionHasErrors('void_reason');
     $this->post($replace, [...$replacement, 'amount' => '100.01'])->assertSessionHasErrors('amount');
     $this->assertDatabaseCount('cash_movements', 1);

@@ -314,6 +314,44 @@ test('un egreso por transferencia usa solo el saldo acreditado de la cuenta sele
     $this->get(route('movements.index'))->assertInertia(fn (Assert $page) => $page->where('balances.bank', 10000));
 });
 
+test('la consulta inmediata comprueba fondos bancarios sin publicar el saldo al operador', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $operator = User::factory()->create();
+    CashOpening::query()->update(['opening_balance_cents' => 8500]);
+    $account = BankAccount::factory()->create(['opening_balance_cents' => 1500]);
+    $secondAccount = BankAccount::factory()->create(['opening_balance_cents' => 9000]);
+    $form = route('movements.create', ['kind' => 'expense']);
+    $check = route('movements.check-bank-funds');
+    $input = ['bank_account_id' => $account->id, 'amount' => '15,00'];
+
+    $this->actingAs($admin)->get($form)->assertInertia(fn (Assert $page) => $page
+        ->where('expenseCashCents', 8500)
+        ->where('banks', fn ($banks) => collect($banks)->firstWhere('id', $account->id)['balanceCents'] === 1500));
+    $this->actingAs($operator)->postJson($check, $input)->assertForbidden();
+
+    openMovementShift($operator);
+    $this->get($form)->assertInertia(fn (Assert $page) => $page
+        ->where('expenseCashCents', 8500)
+        ->missing('banks.0.balanceCents')
+        ->missing('banks.1.balanceCents'));
+    $this->postJson($check, $input)->assertNoContent();
+    $this->postJson($check, [...$input, 'amount' => '15,01'])
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.amount.0', 'El monto supera el saldo disponible en la cuenta seleccionada.');
+    $this->postJson($check, [...$input, 'bank_account_id' => $secondAccount->id, 'amount' => '15,01'])->assertNoContent();
+
+    $this->post(route('movements.store'), [
+        ...$input,
+        'request_id' => (string) Str::uuid(),
+        'kind' => 'expense',
+        'payment_method' => 'transfer',
+        'description' => 'Pago bancario',
+        'voucher' => 'PRUEBA-01',
+        'amount' => '15,01',
+    ])->assertSessionHasErrors(['amount' => 'El monto supera el saldo disponible en la cuenta seleccionada.']);
+    $this->assertDatabaseCount('cash_movements', 0);
+});
+
 test('traslada efectivo a tránsito y luego a banco sin variar el total ni duplicar los importes', function () {
     $administrator = User::factory()->create(['is_admin' => true]);
     $responsible = User::factory()->create();
