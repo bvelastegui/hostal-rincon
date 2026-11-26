@@ -9,8 +9,12 @@ Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la f
 - Administración puede configurar el límite de adelantos de cada empleado. Las cuentas existentes parten de USD 300. Si el límite baja por debajo del saldo pendiente, se bloquean nuevos adelantos hasta recuperar cupo. USD 0 deshabilita nuevos registros. [HR-13](https://nexodigital.youtrack.cloud/issue/HR-13)
 - La configuración inicial permite agregar empleados y configurar su límite de adelantos en un paso opcional.
 - Las tarjetas de empleados muestran el límite, el pendiente de descuento y el cupo disponible. Administración puede corregir un adelanto pendiente del turno abierto antes del cierre. El historial conserva el original anulado y el motivo.
-- Los formularios de adelantos, ingresos, egresos y depósitos destacan el monto en USD. En adelantos se elige primero la fuente de pago y en ingresos y egresos se ingresa primero el importe.
+- Los formularios de adelantos, ingresos, egresos y depósitos destacan el monto en USD. En adelantos y egresos se elige primero la forma de pago. En un ingreso se ingresa primero el importe.
 - Los adelantos, egresos y depósitos avisan de inmediato si el monto supera el cupo o el saldo aplicable. En un egreso por transferencia, el operador puede comprobar si hay fondos sin consultar el saldo total de la cuenta.
+- Los formularios de guardado muestran una confirmación con la operación y los importes en USD. Laravel valida los datos al guardar.
+- El operador que tiene la caja a cargo puede registrar retiros para depósito y consultarlos en su turno. El empleado responsable del turno queda preseleccionado como custodio. Administración confirma la acreditación bancaria o registra la devolución a caja.
+- El Panel reemplaza el widget de configuración inicial por accesos directos para agregar empleados, bancos y cuentas bancarias, y abrir el formulario de cierre independiente.
+- Se actualiza el emblema de Hostal Rincón, se uniforma el ancho de la navegación de escritorio y se fija el tema claro con la paleta azul del sistema.
 
 ## 0.11.0 (prevista)
 
