@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\ConvertUsdToCents;
 use App\Actions\CreateBankAccount;
+use App\Actions\CreateEmployee;
 use App\Actions\RestoreLocalBackup;
 use App\Http\Requests\InitialSetupRequest;
 use App\Models\Bank;
@@ -51,14 +52,16 @@ class InitialSetupController extends Controller implements HasMiddleware
 
     public function create(): Response
     {
-        return Inertia::render('auth/InitialSetup');
+        return Inertia::render('auth/InitialSetup', [
+            'employeeAdvanceLimitCents' => User::DEFAULT_ADVANCE_LIMIT_CENTS,
+        ]);
     }
 
-    public function store(InitialSetupRequest $request, CreateBankAccount $createAccount): RedirectResponse
+    public function store(InitialSetupRequest $request, CreateBankAccount $createAccount, CreateEmployee $createEmployee): RedirectResponse
     {
         $data = $request->validated();
 
-        $user = DB::transaction(function () use ($data, $createAccount): User {
+        $user = DB::transaction(function () use ($data, $createAccount, $createEmployee): User {
             abort_unless(self::available(), 404);
             $opening = CashOpening::query()->lockForUpdate()->sole();
             abort_if($opening->opening_balance_cents !== null || BankAccount::query()->exists(), 409);
@@ -89,6 +92,18 @@ class InitialSetupController extends Controller implements HasMiddleware
             ]);
             $user->is_admin = true;
             $user->save();
+
+            foreach ($data['employees'] ?? [] as $employee) {
+                $limit = isset($employee['advance_limit'])
+                    ? ConvertUsdToCents::fromDecimal((string) $employee['advance_limit'])
+                    : null;
+                $createEmployee(
+                    $employee['name'],
+                    $employee['password'],
+                    username: $employee['username'],
+                    advanceLimitCents: $limit,
+                );
+            }
 
             return $user;
         }, attempts: 3);

@@ -4,6 +4,7 @@ import { Form, Head } from '@inertiajs/vue3';
 import { Check, DatabaseBackup, Plus } from '@lucide/vue';
 import { computed, nextTick, ref, useTemplateRef } from 'vue';
 import AccountIdentifierField from '@/components/AccountIdentifierField.vue';
+import InitialSetupEmployees from '@/components/InitialSetupEmployees.vue';
 import OpeningBalanceField from '@/components/OpeningBalanceField.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +20,8 @@ import {
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { restore, store } from '@/routes/initial-setup';
+
+defineProps<{ employeeAdvanceLimitCents: number }>();
 
 defineOptions({
     layout: {
@@ -54,6 +57,12 @@ const details = {
         description:
             'Agrega cada cuenta que utilizará el hostal. Indica el banco, un alias que permita distinguirla y el saldo acreditado al momento de empezar. Puedes agregar las cuentas más adelante desde Ajustes.',
     },
+    employees: {
+        label: 'Empleados',
+        title: 'Agrega empleados (opcional)',
+        description:
+            'Crea una cuenta de operador para cada persona que manejará la caja. Define su nombre de usuario, una contraseña inicial y su límite de adelantos. Puedes omitir este paso y agregarlos más adelante desde Adelantos.',
+    },
     backup: {
         label: 'Respaldo',
         title: 'Selecciona el respaldo que quieres recuperar',
@@ -68,13 +77,14 @@ const mode = ref<'new' | 'restore'>('new');
 const step = ref<Step>('start');
 const steps = computed<Step[]>(() =>
     mode.value === 'new'
-        ? ['start', 'account', 'cash', 'banks']
+        ? ['start', 'account', 'cash', 'banks', 'employees']
         : ['start', 'backup'],
 );
 const stepIndex = computed(() => steps.value.indexOf(step.value));
 const heading = useTemplateRef<HTMLHeadingElement>('heading');
 const setupForm = useTemplateRef<FormComponentRef>('setupForm');
 const accounts = ref<number[]>([]);
+const employees = ref<number[]>([]);
 let nextAccount = 0;
 
 function goTo(next: Step) {
@@ -87,22 +97,32 @@ function choose(next: 'new' | 'restore') {
     goTo(next === 'new' ? 'account' : 'backup');
 }
 
+const stepValidation = {
+    account: ['name', 'username', 'password'],
+    cash: ['opening_balance'],
+    banks: [
+        'accounts',
+        'accounts.*',
+        'accounts.*.bank',
+        'accounts.*.name',
+        'accounts.*.opening_balance',
+    ],
+};
+
 function nextOrSubmit() {
-    if (step.value === 'banks') {
+    const current = step.value;
+    if (current === 'employees') {
         return true;
     }
 
-    const current = step.value;
-
-    if (current === 'account' || current === 'cash') {
-        setupForm.value?.validate({
-            only:
-                current === 'account'
-                    ? ['name', 'username', 'password']
-                    : ['opening_balance'],
-            onPrecognitionSuccess: () =>
-                goTo(current === 'account' ? 'cash' : 'banks'),
-        });
+    if (current === 'account' || current === 'cash' || current === 'banks') {
+        const next = steps.value[stepIndex.value + 1];
+        if (next) {
+            setupForm.value?.validate({
+                only: stepValidation[current],
+                onPrecognitionSuccess: () => goTo(next),
+            });
+        }
     }
 
     return false;
@@ -113,6 +133,12 @@ function showStepWithErrors(errors: Errors) {
         goTo('account');
     } else if (errors.opening_balance) {
         goTo('cash');
+    } else if (
+        Object.keys(errors).some(
+            (key) => key === 'accounts' || key.startsWith('accounts.'),
+        )
+    ) {
+        goTo('banks');
     }
 }
 </script>
@@ -121,7 +147,7 @@ function showStepWithErrors(errors: Errors) {
     <Head title="Configuración inicial" />
 
     <nav aria-label="Pasos de la configuración">
-        <ol class="flex gap-3">
+        <ol class="flex gap-1.5 sm:gap-3">
             <li
                 v-for="(item, index) in steps"
                 :key="item"
@@ -142,7 +168,7 @@ function showStepWithErrors(errors: Errors) {
                             ? 'font-semibold'
                             : 'text-muted-foreground'
                     "
-                    class="text-sm"
+                    class="text-xs sm:text-sm"
                 >
                     {{ details[item].label }}
                 </span>
@@ -183,7 +209,7 @@ function showStepWithErrors(errors: Errors) {
         @error="showStepWithErrors"
         autocomplete="off"
         novalidate
-        :reset-on-success="['password', 'password_confirmation']"
+        reset-on-success
         disable-while-processing
     >
         <FieldGroup>
@@ -338,6 +364,14 @@ function showStepWithErrors(errors: Errors) {
                 </Button>
             </FieldSet>
 
+            <InitialSetupEmployees
+                v-show="step === 'employees'"
+                v-model="employees"
+                :errors="errors"
+                :limit-cents="employeeAdvanceLimitCents"
+                @removed="clearErrors()"
+            />
+
             <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <Button
                     type="button"
@@ -357,8 +391,10 @@ function showStepWithErrors(errors: Errors) {
                             ? 'Guardando configuración…'
                             : validating
                               ? 'Validando…'
-                              : step === 'banks'
-                                ? 'Guardar e ingresar'
+                              : step === 'employees'
+                                ? employees.length
+                                    ? 'Guardar e ingresar'
+                                    : 'Omitir y finalizar'
                                 : 'Continuar'
                     }}
                 </Button>

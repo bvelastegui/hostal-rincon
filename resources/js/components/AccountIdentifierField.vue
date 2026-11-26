@@ -6,6 +6,7 @@ import type { LoginField } from '@/types/auth';
 
 const props = defineProps<{
     id: string;
+    name?: string;
     field: LoginField;
     label?: string;
     value?: string | null;
@@ -29,7 +30,7 @@ const label = computed(
         <Input
             v-focus="autofocus ?? false"
             :id="id"
-            :name="field"
+            :name="name ?? field"
             :type="field === 'email' ? 'email' : 'text'"
             :default-value="value ?? undefined"
             :maxlength="
