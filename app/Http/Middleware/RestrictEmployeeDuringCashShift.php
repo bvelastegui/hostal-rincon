@@ -19,6 +19,7 @@ class RestrictEmployeeDuringCashShift
         }
 
         $shift = CashShift::active();
+        $request->attributes->set('activeCashShift', $shift);
         $ownsOpenCash = $shift?->responsible_id === $user->id && $shift->delivered_cash_cents === null;
         $request->attributes->set('cashShiftAccess', $ownsOpenCash ? 'owner' : 'restricted');
 

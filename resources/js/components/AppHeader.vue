@@ -5,8 +5,6 @@ import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import LogoutLink from '@/components/LogoutLink.vue';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import {
     NavigationMenu,
     NavigationMenuItem,
@@ -14,8 +12,8 @@ import {
     navigationMenuTriggerStyle,
 } from '@/components/ui/navigation-menu';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
-import { getInitials } from '@/composables/useInitials';
 import { useMainNavigation } from '@/composables/useMainNavigation';
+import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import { index as cashShift } from '@/routes/cash-closings';
 import { edit as editProfile } from '@/routes/profile';
@@ -32,139 +30,98 @@ const props = withDefaults(defineProps<Props>(), {
 const page = usePage();
 const auth = computed(() => page.props.auth);
 const { isCurrentOrParentUrl } = useCurrentUrl();
+const mainNavItems = useMainNavigation();
 const settingsActive = computed(() => isCurrentOrParentUrl('/settings/'));
 
-const activeItemStyles = 'bg-accent text-accent-foreground';
+const menuDividerClass = 'border-l border-primary-foreground/25 pl-4';
 
-const mainNavItems = useMainNavigation();
+const menuItemClass = cn(
+    navigationMenuTriggerStyle(),
+    'h-14 cursor-pointer flex-col gap-1 bg-transparent px-2 py-1.5 text-xs text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground focus:bg-primary-foreground/15 focus:text-primary-foreground focus-visible:ring-primary-foreground/60 aria-[current=location]:bg-primary-foreground aria-[current=location]:text-primary xl:px-3',
+);
 </script>
 
 <template>
-    <div class="hidden lg:block">
-        <div class="border-b border-sidebar-border/80">
-            <div
-                class="app-container grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 min-[75rem]:grid-cols-[auto_minmax(0,1fr)_auto] xl:gap-x-6"
+    <header class="hidden border-b bg-primary text-primary-foreground lg:block">
+        <div class="app-container flex items-center gap-4 py-2.5">
+            <Link
+                :href="auth.cashShiftAccess ? cashShift() : dashboard()"
+                aria-label="Hostal Rincón"
+                class="flex shrink-0 items-center gap-2 rounded-md focus-visible:outline-2 focus-visible:outline-primary-foreground"
             >
-                <Link
-                    :href="auth.cashShiftAccess ? cashShift() : dashboard()"
-                    class="col-start-1 row-start-1 flex h-14 items-center gap-2 justify-self-start min-[75rem]:h-16"
-                >
-                    <AppLogo />
-                </Link>
+                <AppLogo />
+            </Link>
 
-                <div
-                    class="col-span-2 col-start-1 row-start-2 flex h-11 min-w-0 min-[75rem]:col-span-1 min-[75rem]:col-start-2 min-[75rem]:row-start-1 min-[75rem]:h-16"
-                >
-                    <NavigationMenu
-                        aria-label="Menú principal"
-                        class="flex h-full items-stretch"
-                    >
-                        <NavigationMenuList
-                            class="flex h-full items-stretch gap-1"
-                        >
-                            <NavigationMenuItem
-                                v-for="item in mainNavItems"
-                                :key="item.title"
-                                class="relative flex h-full items-center"
-                            >
-                                <Link
-                                    :class="[
-                                        navigationMenuTriggerStyle(),
-                                        isCurrentOrParentUrl(item.href) &&
-                                            activeItemStyles,
-                                        'h-9 cursor-pointer px-3',
-                                    ]"
-                                    :href="item.href"
-                                    :aria-current="
-                                        isCurrentOrParentUrl(item.href)
-                                            ? 'location'
-                                            : undefined
-                                    "
-                                >
-                                    <component
-                                        v-if="item.icon"
-                                        :is="item.icon"
-                                        class="mr-2 size-4"
-                                        aria-hidden="true"
-                                    />
-                                    {{ item.title }}
-                                </Link>
-                                <div
-                                    v-if="isCurrentOrParentUrl(item.href)"
-                                    class="absolute bottom-0 left-0 h-0.5 w-full translate-y-px bg-primary"
-                                ></div>
-                            </NavigationMenuItem>
-                        </NavigationMenuList>
-                    </NavigationMenu>
-                </div>
-
-                <div
-                    class="col-start-2 row-start-1 flex items-center gap-2 min-[75rem]:col-start-3"
-                >
-                    <div
-                        class="flex items-center gap-2 pe-1"
-                        :title="auth.user.name"
-                    >
-                        <Avatar class="size-8" aria-hidden="true">
-                            <AvatarImage
-                                v-if="auth.user.avatar"
-                                :src="auth.user.avatar"
-                                alt=""
-                            />
-                            <AvatarFallback class="font-semibold">
-                                {{ getInitials(auth.user.name) }}
-                            </AvatarFallback>
-                        </Avatar>
-                        <span class="sr-only xl:not-sr-only">
-                            <span
-                                class="block max-w-28 truncate text-sm font-medium"
-                            >
-                                {{ auth.user.name }}
-                            </span>
-                        </span>
-                    </div>
-
-                    <Button
-                        v-if="!auth.cashShiftAccess"
-                        as-child
-                        :variant="settingsActive ? 'secondary' : 'ghost'"
+            <NavigationMenu
+                aria-label="Menú principal"
+                :class="cn('max-w-none justify-start', menuDividerClass)"
+            >
+                <NavigationMenuList class="justify-start gap-0.5 xl:gap-1">
+                    <NavigationMenuItem
+                        v-for="item in mainNavItems"
+                        :key="item.title"
                     >
                         <Link
+                            :href="item.href"
+                            :class="menuItemClass"
+                            :aria-current="
+                                isCurrentOrParentUrl(item.href)
+                                    ? 'location'
+                                    : undefined
+                            "
+                        >
+                            <component
+                                v-if="item.icon"
+                                :is="item.icon"
+                                class="size-6 shrink-0"
+                                aria-hidden="true"
+                            />
+                            {{ item.title }}
+                        </Link>
+                    </NavigationMenuItem>
+                </NavigationMenuList>
+            </NavigationMenu>
+
+            <NavigationMenu
+                aria-label="Ajustes y sesión"
+                :class="cn('flex-none', menuDividerClass)"
+            >
+                <NavigationMenuList class="gap-0.5 xl:gap-1">
+                    <NavigationMenuItem v-if="!auth.cashShiftAccess">
+                        <Link
                             :href="editProfile()"
+                            :class="menuItemClass"
                             :aria-current="
                                 settingsActive ? 'location' : undefined
                             "
                         >
                             <Settings
-                                data-icon="inline-start"
+                                class="size-6 shrink-0"
                                 aria-hidden="true"
                             />
                             Ajustes
                         </Link>
-                    </Button>
-
-                    <Button as-child variant="outline">
-                        <LogoutLink data-test="logout-button">
+                    </NavigationMenuItem>
+                    <NavigationMenuItem>
+                        <LogoutLink
+                            :class="menuItemClass"
+                            data-test="logout-button"
+                        >
                             <LogOut
-                                data-icon="inline-start"
+                                class="size-6 shrink-0"
                                 aria-hidden="true"
                             />
                             Cambiar de sesión
                         </LogoutLink>
-                    </Button>
-                </div>
-            </div>
+                    </NavigationMenuItem>
+                </NavigationMenuList>
+            </NavigationMenu>
         </div>
+    </header>
 
-        <div
-            v-if="props.breadcrumbs.length > 1"
-            class="flex w-full border-b border-sidebar-border/70"
-        >
-            <div
-                class="app-container flex h-12 items-center text-muted-foreground"
-            >
-                <Breadcrumbs :breadcrumbs="breadcrumbs" />
-            </div>
+    <div v-if="props.breadcrumbs.length > 1" class="hidden border-b lg:block">
+        <div class="app-container flex h-10 items-center text-muted-foreground">
+            <Breadcrumbs :breadcrumbs="breadcrumbs" />
         </div>
     </div>
 </template>

@@ -1,19 +1,19 @@
 <script setup lang="ts">
-import { usePage } from '@inertiajs/vue3';
-import AppLogoIcon from '@/components/AppLogoIcon.vue';
-
-const name = usePage().props.name;
+import emblem from '../../images/hostal-rincon-emblema.webp';
 </script>
 
 <template>
-    <div
-        class="flex aspect-square size-8 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground"
-    >
-        <AppLogoIcon class="size-5" />
-    </div>
-    <div class="ml-1 grid flex-1 text-left text-sm">
-        <span class="mb-0.5 truncate leading-tight font-semibold">{{
-            name
-        }}</span>
-    </div>
+    <span class="inline-flex items-center gap-1.5 py-1">
+        <img
+            :src="emblem"
+            alt=""
+            width="40"
+            height="40"
+            class="size-10 shrink-0"
+        />
+        <span class="text-left font-sans text-xl leading-none font-semibold">
+            <span class="block">Hostal</span>
+            <span class="block">Rincón</span>
+        </span>
+    </span>
 </template>
