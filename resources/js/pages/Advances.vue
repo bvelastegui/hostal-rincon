@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { Check, Plus, TriangleAlert, X } from '@lucide/vue';
+import { Check, Pencil, Plus, TriangleAlert, X } from '@lucide/vue';
 import { computed, h, ref } from 'vue';
 import {
     correction,
@@ -381,7 +381,10 @@ function confirmDeduction(): void {
                         size="sm"
                         class="min-h-10 shrink-0 text-primary"
                     >
-                        <Link :href="editEmployee(employee.id)">Editar</Link>
+                        <Link :href="editEmployee(employee.id)">
+                            <span>Editar</span>
+                            <Pencil data-icon="inline-end" aria-hidden="true" />
+                        </Link>
                     </Button>
                 </CardHeader>
                 <CardContent class="border-y px-0">
@@ -451,20 +454,20 @@ function confirmDeduction(): void {
                         "
                         :variant="available(employee) ? 'default' : 'secondary'"
                         :disabled="!available(employee)"
-                        class="min-h-11 w-full"
+                        class="h-full min-h-11 w-full justify-between py-2 text-left whitespace-normal"
                     >
-                        <Plus data-icon="inline-start" />
-                        Registrar adelanto
+                        <span>Registrar adelanto</span>
+                        <Plus data-icon="inline-end" aria-hidden="true" />
                     </Button>
                     <Button
                         type="button"
                         variant="outline"
-                        class="min-h-11 w-full"
+                        class="h-full min-h-11 w-full justify-between py-2 text-left whitespace-normal"
                         :disabled="!employee.pendingCents"
                         @click="openDeduction(employee)"
                     >
-                        <Check data-icon="inline-start" />
-                        Marcar como descontados
+                        <span>Marcar como descontados</span>
+                        <Check data-icon="inline-end" aria-hidden="true" />
                     </Button>
                 </CardFooter>
             </Card>
