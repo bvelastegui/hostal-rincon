@@ -28,7 +28,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ProtectSharedBrowserSession::class,
             RestrictEmployeeDuringCashShift::class,
             HandleInertiaRequests::class,
-            AddLinkHeadersForPreloadedAssets::class,
+            AddLinkHeadersForPreloadedAssets::using(12),
             HandlePrecognitiveRequests::class,
         ]);
     })
