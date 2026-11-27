@@ -18,6 +18,7 @@ import {
     FieldLabel,
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { advancesModuleTitle } from '@/lib/advances';
 import {
     fieldValue,
     reviewAmount,
@@ -46,7 +47,7 @@ const action = computed(() =>
 );
 
 defineOptions({
-    layout: { breadcrumbs: [{ title: 'Adelantos', href: index() }] },
+    layout: { breadcrumbs: [{ title: advancesModuleTitle, href: index() }] },
 });
 function employeeReview(data: FormData) {
     return {

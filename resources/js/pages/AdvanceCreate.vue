@@ -18,6 +18,7 @@ import {
     FieldGroup,
     FieldLabel,
 } from '@/components/ui/field';
+import { advancesModuleTitle } from '@/lib/advances';
 import { paymentOptions } from '@/lib/cash-movement';
 import { formatUsd, parseUsdCents } from '@/lib/money';
 import {
@@ -44,7 +45,7 @@ const props = defineProps<{
 }>();
 
 defineOptions({
-    layout: { breadcrumbs: [{ title: 'Adelantos', href: index() }] },
+    layout: { breadcrumbs: [{ title: advancesModuleTitle, href: index() }] },
 });
 
 const employeeCapacity = computed(() =>

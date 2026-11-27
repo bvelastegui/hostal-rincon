@@ -35,6 +35,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { advancesModuleTitle } from '@/lib/advances';
 import { paymentOptions } from '@/lib/cash-movement';
 import { formatUsd } from '@/lib/money';
 import { reviewAmount } from '@/lib/record-confirmation';
@@ -83,7 +84,7 @@ const props = defineProps<{
 }>();
 
 defineOptions({
-    layout: { breadcrumbs: [{ title: 'Adelantos', href: index() }] },
+    layout: { breadcrumbs: [{ title: advancesModuleTitle, href: index() }] },
 });
 
 const date = new Intl.DateTimeFormat('es-EC', {
@@ -307,12 +308,14 @@ function confirmDeduction(): void {
 
 <template>
     <div class="space-y-6">
-        <Head title="Adelantos" />
+        <Head :title="advancesModuleTitle" />
         <header
             class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
         >
             <div class="space-y-1">
-                <h1 class="text-2xl font-semibold tracking-tight">Adelantos</h1>
+                <h1 class="text-2xl font-semibold tracking-tight">
+                    {{ advancesModuleTitle }}
+                </h1>
                 <p class="text-sm text-muted-foreground">
                     Consulta el límite y el saldo pendiente de cada empleado.
                 </p>
@@ -323,9 +326,15 @@ function confirmDeduction(): void {
         </header>
 
         <section
-            aria-label="Saldos por empleado"
+            aria-labelledby="advance-employees"
             class="grid gap-4 lg:grid-cols-2"
         >
+            <h2
+                id="advance-employees"
+                class="text-lg font-semibold lg:col-span-2"
+            >
+                Empleados
+            </h2>
             <Card
                 v-for="employee in employees"
                 :key="employee.id"
@@ -459,7 +468,10 @@ function confirmDeduction(): void {
                     </Button>
                 </CardFooter>
             </Card>
-            <p v-if="!employees.length" class="text-sm text-muted-foreground">
+            <p
+                v-if="!employees.length"
+                class="text-sm text-muted-foreground lg:col-span-2"
+            >
                 Todavía no hay empleados configurados. Usa “Agregar empleado”
                 para crear una cuenta.
             </p>

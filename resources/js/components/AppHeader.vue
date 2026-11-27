@@ -37,7 +37,7 @@ const menuDividerClass = 'border-l border-primary-foreground/25 pl-4';
 
 const menuItemClass = cn(
     navigationMenuTriggerStyle(),
-    'h-16 w-24 shrink-0 cursor-pointer flex-col gap-1 bg-transparent px-1 py-1 text-center text-xs leading-none whitespace-normal text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground focus:bg-primary-foreground/15 focus:text-primary-foreground focus-visible:ring-primary-foreground/60 aria-[current=location]:bg-primary-foreground aria-[current=location]:text-primary xl:w-28 xl:px-2 [&>svg]:size-6 [&>svg]:shrink-0',
+    'h-16 w-24 shrink-0 cursor-pointer flex-col justify-start gap-2 bg-transparent px-1 py-1.5 text-center text-xs leading-none whitespace-normal text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground focus:bg-primary-foreground/15 focus:text-primary-foreground focus-visible:ring-primary-foreground/60 aria-[current=location]:bg-primary-foreground aria-[current=location]:text-primary xl:w-28 xl:px-2 [&>svg]:size-6 [&>svg]:shrink-0',
 );
 </script>
 
@@ -75,7 +75,7 @@ const menuItemClass = cn(
                                 :is="item.icon"
                                 aria-hidden="true"
                             />
-                            {{ item.title }}
+                            <span>{{ item.title }}</span>
                         </Link>
                     </NavigationMenuItem>
                 </NavigationMenuList>
@@ -95,7 +95,7 @@ const menuItemClass = cn(
                             "
                         >
                             <Settings aria-hidden="true" />
-                            Ajustes
+                            <span>Ajustes</span>
                         </Link>
                     </NavigationMenuItem>
                     <NavigationMenuItem>
