@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import type { FormComponentRef } from '@inertiajs/core';
 import { Form, Head, Link, useHttp, usePage } from '@inertiajs/vue3';
 import { createReusableTemplate } from '@vueuse/core';
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, useTemplateRef } from 'vue';
 import CashMovementVoidReason from '@/components/CashMovementVoidReason.vue';
 import HighlightedAmountField from '@/components/HighlightedAmountField.vue';
 import RecordAmounts from '@/components/RecordAmounts.vue';
@@ -33,6 +34,7 @@ import {
     fieldValue,
     reviewAmount,
     reviewSubmission,
+    inertiaValidation,
 } from '@/lib/record-confirmation';
 import {
     annul,
@@ -357,6 +359,11 @@ function movementReview(data: FormData) {
         ],
     };
 }
+
+const reviewForm = useTemplateRef<FormComponentRef>('reviewForm');
+const secondaryReviewForm = useTemplateRef<FormComponentRef>(
+    'secondaryReviewForm',
+);
 </script>
 
 <template>
@@ -426,11 +433,18 @@ function movementReview(data: FormData) {
         </dl>
 
         <Form
+            ref="reviewForm"
             novalidate
             v-bind="action"
             v-slot="{ errors, processing, clearErrors }"
             error-bag="movementForm"
-            @submit.capture="reviewSubmission($event, movementReview)"
+            @submit.capture="
+                reviewSubmission(
+                    $event,
+                    movementReview,
+                    inertiaValidation(reviewForm),
+                )
+            "
         >
             <DefinePaymentMethod>
                 <SelectField
@@ -783,23 +797,28 @@ function movementReview(data: FormData) {
         <template v-if="movement && isDeposit">
             <Separator />
             <Form
+                ref="secondaryReviewForm"
                 novalidate
                 v-bind="returnToCash.form(movement.id)"
                 v-slot="{ errors, processing }"
                 error-bag="returnDeposit"
                 @submit.capture="
-                    reviewSubmission($event, {
-                        title: 'Confirmar devolución a caja',
-                        description:
-                            'El dinero saldrá de tránsito y volverá al saldo de efectivo.',
-                        amounts: [
-                            reviewAmount(
-                                'Efectivo devuelto (USD)',
-                                movement.amountCents,
-                            ),
-                        ],
-                        confirmLabel: 'Confirmar devolución',
-                    })
+                    reviewSubmission(
+                        $event,
+                        {
+                            title: 'Confirmar devolución a caja',
+                            description:
+                                'El dinero saldrá de tránsito y volverá al saldo de efectivo.',
+                            amounts: [
+                                reviewAmount(
+                                    'Efectivo devuelto (USD)',
+                                    movement.amountCents,
+                                ),
+                            ],
+                            confirmLabel: 'Confirmar devolución',
+                        },
+                        inertiaValidation(secondaryReviewForm),
+                    )
                 "
                 class="flex flex-col items-start gap-2"
             >

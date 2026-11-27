@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useTemplateRef } from 'vue';
+import type { FormComponentRef } from '@inertiajs/core';
 import { Form, Head } from '@inertiajs/vue3';
 import { updateOpening } from '@/actions/App/Http/Controllers/Settings/CashSettingsController';
 import Heading from '@/components/Heading.vue';
@@ -11,6 +13,7 @@ import {
     fieldValue,
     reviewAmount,
     reviewSubmission,
+    inertiaValidation,
 } from '@/lib/record-confirmation';
 import { edit } from '@/routes/cash-settings';
 
@@ -23,6 +26,8 @@ defineOptions({
         breadcrumbs: [{ title: 'Efectivo', href: edit() }],
     },
 });
+
+const reviewForm = useTemplateRef<FormComponentRef>('reviewForm');
 </script>
 
 <template>
@@ -42,23 +47,28 @@ defineOptions({
                 </span>
             </p>
             <Form
+                ref="reviewForm"
                 novalidate
                 v-else
                 v-bind="updateOpening.form()"
                 v-slot="{ errors, processing }"
                 error-bag="cashOpening"
                 @submit.capture="
-                    reviewSubmission($event, (data) => ({
-                        title: 'Confirmar saldo inicial de caja',
-                        description:
-                            'Este valor se usará como base para calcular el efectivo disponible.',
-                        amounts: [
-                            reviewAmount(
-                                'Efectivo inicial (USD)',
-                                fieldValue(data, 'opening_balance'),
-                            ),
-                        ],
-                    }))
+                    reviewSubmission(
+                        $event,
+                        (data) => ({
+                            title: 'Confirmar saldo inicial de caja',
+                            description:
+                                'Este valor se usará como base para calcular el efectivo disponible.',
+                            amounts: [
+                                reviewAmount(
+                                    'Efectivo inicial (USD)',
+                                    fieldValue(data, 'opening_balance'),
+                                ),
+                            ],
+                        }),
+                        inertiaValidation(reviewForm),
+                    )
                 "
             >
                 <FieldGroup

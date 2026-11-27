@@ -2,10 +2,12 @@
 
 namespace App\Http\Requests;
 
+use App\Actions\CalculateCashBalances;
 use App\Actions\ConvertUsdToCents;
-use Illuminate\Foundation\Http\FormRequest;
+use App\Models\CashShift;
+use Illuminate\Validation\Validator;
 
-class StoreCashClosingRequest extends FormRequest
+class StoreCashClosingRequest extends ReviewableRequest
 {
     protected function prepareForValidation(): void
     {
@@ -32,6 +34,36 @@ class StoreCashClosingRequest extends FormRequest
     public function attributes(): array
     {
         return ['counted_cash' => 'efectivo contado', 'note' => 'observación'];
+    }
+
+    protected function review(Validator $validator): void
+    {
+        $shift = CashShift::active();
+        $shiftId = $this->filled('cash_shift_id') ? $this->integer('cash_shift_id') : null;
+        if ($shift?->id !== $shiftId) {
+            $validator->errors()->add('cash_shift_id', 'El turno activo cambió. Revisa quién tiene la caja antes de confirmar.');
+
+            return;
+        }
+
+        $current = app(CalculateCashBalances::class)->handle(true)['cash'];
+        if ($current === null || $current !== $this->integer('expected_cash_cents')) {
+            $validator->errors()->add('expected_cash_cents', $current === null
+                ? 'Configura el saldo inicial de efectivo para registrar el cierre.'
+                : 'El saldo esperado cambió. Revisa el saldo actualizado antes de confirmar.');
+
+            return;
+        }
+
+        if ($this->filled('note')) {
+            return;
+        }
+
+        if ($this->routeIs('cash-closings.administrative-close')) {
+            $validator->errors()->add('note', 'Ingresa el motivo del cierre administrativo.');
+        } elseif ($this->countedCashCents() !== $current) {
+            $validator->errors()->add('note', 'Ingresa una observación para registrar el faltante o sobrante.');
+        }
     }
 
     public function countedCashCents(): int

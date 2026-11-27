@@ -1,14 +1,15 @@
 <script setup lang="ts">
+import type { FormComponentRef } from '@inertiajs/core';
 import { Form, Head } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { ref, useTemplateRef } from 'vue';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { reviewSubmission } from '@/lib/record-confirmation';
+import { reviewSubmission, inertiaValidation } from '@/lib/record-confirmation';
 import { Spinner } from '@/components/ui/spinner';
-import { update } from '@/routes/password';
+import { review as reviewPassword, update } from '@/routes/password';
 
 defineOptions({
     layout: {
@@ -24,26 +25,33 @@ const props = defineProps<{
 }>();
 
 const inputEmail = ref(props.email);
+
+const reviewForm = useTemplateRef<FormComponentRef>('reviewForm');
 </script>
 
 <template>
     <Head title="Restablecer contraseña" />
 
     <Form
+        ref="reviewForm"
         novalidate
         v-bind="update.form()"
         @submit.capture="
-            reviewSubmission($event, {
-                title: 'Confirmar nueva contraseña',
-                description:
-                    'Usarás la nueva contraseña la próxima vez que inicies sesión.',
-            })
+            reviewSubmission(
+                $event,
+                {
+                    title: 'Confirmar nueva contraseña',
+                    description:
+                        'Usarás la nueva contraseña la próxima vez que inicies sesión.',
+                },
+                { ...inertiaValidation(reviewForm), route: reviewPassword() },
+            )
         "
         autocomplete="off"
-        :transform="(data) => ({ ...data, token, email })"
         :reset-on-success="['password', 'password_confirmation']"
         v-slot="{ errors, processing }"
     >
+        <input type="hidden" name="token" :value="token" />
         <div class="grid gap-6">
             <div class="grid gap-2">
                 <Label for="email">Correo electrónico</Label>

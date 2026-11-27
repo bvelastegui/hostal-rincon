@@ -19,6 +19,61 @@ test('exige una sesión para ver y registrar movimientos', function () {
     $this->post(route('movements.store'), [])->assertRedirectToRoute('login');
 });
 
+test('valida un movimiento antes de confirmar sin registrar ni bloquear la caja', function () {
+    $user = User::factory()->create(['is_admin' => true]);
+    CashOpening::query()->update(['opening_balance_cents' => 5000]);
+    $this->actingAs($user);
+
+    $url = route('movements.store');
+    $review = ['Precognition' => 'true'];
+    $entry = [
+        'request_id' => (string) Str::uuid(),
+        'kind' => 'income',
+        'payment_method' => 'cash',
+    ];
+
+    $this->postJson($url, $entry, $review)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['amount', 'description']);
+    $this->postJson($url, [...$entry, 'amount' => '-1,00', 'description' => 'Hospedaje'], $review)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('amount');
+
+    $valid = [...$entry, 'amount' => '25,05', 'description' => 'Hospedaje'];
+    $this->postJson($url, $valid, $review)
+        ->assertNoContent()
+        ->assertHeader('Precognition-Success', 'true');
+    $this->assertDatabaseCount('cash_movements', 0);
+    expect(CashOpening::query()->sole()->opening_locked_at)->toBeNull();
+
+    $this->post($url, $valid)->assertRedirect()->assertSessionHasNoErrors();
+    $this->assertDatabaseHas('cash_movements', ['request_id' => $entry['request_id'], 'amount_cents' => 2505]);
+});
+
+test('la validación previa distingue guardar de guardar y confirmar una transferencia', function () {
+    $this->actingAs(User::factory()->create(['is_admin' => true]));
+    $origin = Bank::factory()->create();
+    $account = BankAccount::factory()->create();
+    $url = route('movements.store');
+    $review = ['Precognition' => 'true'];
+    $entry = [
+        'request_id' => (string) Str::uuid(),
+        'kind' => 'income',
+        'payment_method' => 'transfer',
+        'description' => 'Hospedaje',
+        'amount' => '25,05',
+        'origin_bank_id' => $origin->id,
+        'bank_account_id' => $account->id,
+    ];
+
+    $this->postJson($url, [...$entry, 'confirm' => '0'], $review)->assertNoContent();
+    $this->postJson($url, [...$entry, 'confirm' => '1'], $review)
+        ->assertUnprocessable()->assertJsonValidationErrors('voucher');
+    $this->postJson($url, [...$entry, 'confirm' => '1', 'voucher' => 'PRUEBA-001'], $review)
+        ->assertNoContent();
+    $this->assertDatabaseCount('cash_movements', 0);
+});
+
 test('registra un cobro en efectivo y un egreso una sola vez al guardar', function () {
     $operator = User::factory()->create();
     $responsible = User::factory()->create();

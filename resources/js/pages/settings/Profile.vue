@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import type { FormComponentRef } from '@inertiajs/core';
 import { Form, Head, usePage } from '@inertiajs/vue3';
 import { LogOut } from '@lucide/vue';
-import { computed } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import AccountIdentifierField from '@/components/AccountIdentifierField.vue';
 import Heading from '@/components/Heading.vue';
@@ -10,7 +11,7 @@ import LogoutLink from '@/components/LogoutLink.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { reviewSubmission } from '@/lib/record-confirmation';
+import { reviewSubmission, inertiaValidation } from '@/lib/record-confirmation';
 import { Separator } from '@/components/ui/separator';
 import { edit } from '@/routes/profile';
 
@@ -28,6 +29,8 @@ defineOptions({
 const page = usePage();
 const loginField = page.props.auth.loginField;
 const user = computed(() => page.props.auth.user);
+
+const reviewForm = useTemplateRef<FormComponentRef>('reviewForm');
 </script>
 
 <template>
@@ -46,14 +49,19 @@ const user = computed(() => page.props.auth.user);
         />
 
         <Form
+            ref="reviewForm"
             novalidate
             v-bind="ProfileController.update.form()"
             @submit.capture="
-                reviewSubmission($event, {
-                    title: 'Confirmar cambios de perfil',
-                    description:
-                        'Se actualizarán tus datos de perfil y de acceso.',
-                })
+                reviewSubmission(
+                    $event,
+                    {
+                        title: 'Confirmar cambios de perfil',
+                        description:
+                            'Se actualizarán tus datos de perfil y de acceso.',
+                    },
+                    inertiaValidation(reviewForm),
+                )
             "
             class="grid gap-6"
             v-slot="{ errors, processing }"

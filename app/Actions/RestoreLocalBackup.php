@@ -19,9 +19,8 @@ class RestoreLocalBackup
 {
     private const CANDIDATE = 'desktop_backup_candidate';
 
-    public function handle(UploadedFile $upload): void
+    public function handle(UploadedFile $upload, bool $review = false): void
     {
-        $live = DB::connection();
         $workspace = storage_path('hostal-restauracion-'.Str::uuid());
         $archivePath = $workspace.DIRECTORY_SEPARATOR.'backup.zip';
         $snapshot = $workspace.DIRECTORY_SEPARATOR.'database.sqlite';
@@ -33,7 +32,9 @@ class RestoreLocalBackup
 
             $this->extractVerifiedSnapshot($archivePath, $workspace, $snapshot);
             $this->migrateSnapshot($snapshot);
-            $this->importSnapshot($live, $snapshot);
+            if (! $review) {
+                $this->importSnapshot(DB::connection(), $snapshot);
+            }
         } catch (ValidationException|HttpExceptionInterface $exception) {
             throw $exception;
         } catch (Throwable $exception) {
@@ -118,6 +119,10 @@ class RestoreLocalBackup
 
         if (! $candidate->table('users')->where('is_admin', true)->whereNotNull('username')->exists()) {
             throw ValidationException::withMessages(['backup' => 'El respaldo no contiene una cuenta administradora que pueda iniciar sesión.']);
+        }
+
+        if ($candidate->selectOne('PRAGMA foreign_key_check') !== null) {
+            throw ValidationException::withMessages(['backup' => 'El respaldo contiene registros relacionados que no se pueden recuperar.']);
         }
 
         DB::disconnect(self::CANDIDATE);

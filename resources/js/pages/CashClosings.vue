@@ -1,5 +1,16 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import {
+    ArrowDownLeft,
+    ArrowLeftRight,
+    ArrowUpRight,
+    Check,
+    ClipboardCheck,
+    LockKeyhole,
+    LogOut,
+    Play,
+    X,
+} from '@lucide/vue';
 import { computed, ref } from 'vue';
 import CashClosingHistory from '@/components/CashClosingHistory.vue';
 import LogoutLink from '@/components/LogoutLink.vue';
@@ -14,7 +25,11 @@ import {
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { formatCashDifference, formatUsd } from '@/lib/money';
-import { reviewAmount, reviewSubmission } from '@/lib/record-confirmation';
+import {
+    reviewAmount,
+    reviewSubmission,
+    showValidationErrors,
+} from '@/lib/record-confirmation';
 import {
     administrativeClose,
     index,
@@ -58,6 +73,9 @@ const form = useForm({
     expected_cash_cents: null as number | null,
     cash_shift_id: null as number | null,
 });
+
+const shiftButtonClass =
+    'h-auto min-h-11 w-full justify-between py-2 text-left whitespace-normal sm:w-60';
 
 const assignment = useForm({ responsible_id: '' });
 const page = usePage();
@@ -182,34 +200,40 @@ function closingReview() {
     };
 }
 
+const closingRoutes = {
+    deliver: prepareHandoff(),
+    receive: receiveShift(),
+    close: store(),
+    administrative: administrativeClose(),
+    opening: openOwnShift(),
+};
+const closingRoute = computed(() =>
+    action.value ? closingRoutes[action.value] : undefined,
+);
+
+function closingPayload() {
+    return {
+        ...form.data(),
+        request_id: props.requestId,
+        expected_cash_cents: props.expectedCashCents,
+        cash_shift_id: props.activeShift?.id ?? null,
+    };
+}
+
 function submit() {
     if (!action.value) {
         return;
     }
 
-    form.transform((data) => ({
-        ...data,
-        request_id: props.requestId,
-        expected_cash_cents: props.expectedCashCents,
-        cash_shift_id: props.activeShift?.id ?? null,
-    })).submit(
-        {
-            deliver: prepareHandoff(),
-            receive: receiveShift(),
-            close: store(),
-            administrative: administrativeClose(),
-            opening: openOwnShift(),
-        }[action.value],
-        {
-            preserveScroll: true,
-            onBefore: () => {
-                if (action.value === 'deliver') {
-                    router.flushAll();
-                }
-            },
-            onSuccess: () => selectAction(null),
+    form.transform(closingPayload).submit(closingRoutes[action.value], {
+        preserveScroll: true,
+        onBefore: () => {
+            if (action.value === 'deliver') {
+                router.flushAll();
+            }
         },
-    );
+        onSuccess: () => selectAction(null),
+    });
 }
 </script>
 
@@ -234,9 +258,15 @@ function submit() {
                     v-if="page.props.auth.cashShiftAccess !== 'restricted'"
                     as-child
                     variant="outline"
-                    class="min-h-11"
+                    :class="shiftButtonClass"
                 >
-                    <Link :href="movements()">Volver a movimientos</Link>
+                    <Link :href="movements()">
+                        <span>Volver a movimientos</span>
+                        <ArrowLeftRight
+                            data-icon="inline-end"
+                            aria-hidden="true"
+                        />
+                    </Link>
                 </Button>
             </header>
 
@@ -288,25 +318,36 @@ function submit() {
                         v-if="!activeShift && canClose && !action"
                         class="flex flex-col gap-4"
                         @submit.capture="
-                            reviewSubmission($event, {
-                                title: 'Confirmar inicio de turno',
-                                description:
-                                    'La caja quedará a cargo del responsable seleccionado.',
-                                amounts: [
-                                    reviewAmount(
-                                        'Efectivo disponible (USD)',
-                                        expectedCashCents,
+                            reviewSubmission(
+                                $event,
+                                {
+                                    title: 'Confirmar inicio de turno',
+                                    description:
+                                        'La caja quedará a cargo del responsable seleccionado.',
+                                    amounts: [
+                                        reviewAmount(
+                                            'Efectivo disponible (USD)',
+                                            expectedCashCents,
+                                        ),
+                                    ],
+                                    details: [
+                                        responsibleOptions.find(
+                                            (option) =>
+                                                option.value ===
+                                                assignment.responsible_id,
+                                        )?.label,
+                                    ],
+                                    confirmLabel: 'Iniciar turno',
+                                },
+                                {
+                                    ...showValidationErrors(
+                                        () => assignment.clearErrors(),
+                                        (errors) => assignment.setError(errors),
                                     ),
-                                ],
-                                details: [
-                                    responsibleOptions.find(
-                                        (option) =>
-                                            option.value ===
-                                            assignment.responsible_id,
-                                    )?.label,
-                                ],
-                                confirmLabel: 'Iniciar turno',
-                            })
+                                    route: startShift(),
+                                    data: assignment.data(),
+                                },
+                            )
                         "
                         @submit.prevent="assignment.submit(startShift())"
                     >
@@ -320,13 +361,15 @@ function submit() {
                         />
                         <Button
                             type="submit"
-                            class="min-h-11 sm:self-end"
+                            :class="shiftButtonClass"
+                            class="sm:self-end"
                             :disabled="
                                 assignment.processing ||
                                 !assignment.responsible_id
                             "
                         >
-                            Iniciar turno
+                            <span>Iniciar turno</span>
+                            <Play data-icon="inline-end" aria-hidden="true" />
                         </Button>
                     </form>
                     <div
@@ -345,10 +388,15 @@ function submit() {
                         </p>
                         <Button
                             type="button"
-                            class="min-h-11 sm:self-start"
+                            :class="shiftButtonClass"
+                            class="sm:self-start"
                             @click="selectAction('deliver')"
                         >
-                            Entregar turno
+                            <span>Entregar turno</span>
+                            <ArrowUpRight
+                                data-icon="inline-end"
+                                aria-hidden="true"
+                            />
                         </Button>
                     </div>
                     <div
@@ -362,10 +410,16 @@ function submit() {
                             </p>
                             <Button
                                 type="button"
-                                class="min-h-11 sm:self-start"
+                                :class="shiftButtonClass"
+                                class="sm:self-start"
                                 @click="selectAction('receive')"
-                                >Recibir turno</Button
                             >
+                                <span>Recibir turno</span>
+                                <ArrowDownLeft
+                                    data-icon="inline-end"
+                                    aria-hidden="true"
+                                />
+                            </Button>
                         </div>
                         <div class="flex flex-col gap-2">
                             <p class="text-sm text-muted-foreground">
@@ -375,19 +429,30 @@ function submit() {
                             <Button
                                 type="button"
                                 variant="outline"
-                                class="min-h-11 sm:self-start"
+                                :class="shiftButtonClass"
+                                class="sm:self-start"
                                 @click="selectAction('close')"
-                                >Hacer cierre independiente</Button
                             >
+                                <span>Hacer cierre independiente</span>
+                                <ClipboardCheck
+                                    data-icon="inline-end"
+                                    aria-hidden="true"
+                                />
+                            </Button>
                         </div>
                         <Button
                             v-if="activeShift"
                             type="button"
                             variant="destructive"
-                            class="min-h-11 sm:self-start"
+                            :class="shiftButtonClass"
+                            class="sm:self-start"
                             @click="selectAction('administrative')"
                         >
-                            Cerrar turno como administradora
+                            <span>Cerrar turno como administradora</span>
+                            <LockKeyhole
+                                data-icon="inline-end"
+                                aria-hidden="true"
+                            />
                         </Button>
                     </div>
                     <p
@@ -412,7 +477,14 @@ function submit() {
                         v-else-if="expectedCashCents !== null && action"
                         class="flex flex-col gap-5"
                         @submit.capture="
-                            reviewSubmission($event, closingReview)
+                            reviewSubmission($event, closingReview, {
+                                ...showValidationErrors(
+                                    () => form.clearErrors(),
+                                    (errors) => form.setError(errors),
+                                ),
+                                route: closingRoute,
+                                data: closingPayload(),
+                            })
                         "
                         @submit.prevent="submit"
                     >
@@ -513,24 +585,29 @@ function submit() {
                             }}
                         </FieldError>
                         <div
-                            class="flex flex-col gap-2 sm:flex-row sm:justify-end"
+                            class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end"
                         >
                             <Button
                                 v-if="canClose || action === 'deliver'"
                                 type="button"
                                 variant="outline"
-                                class="min-h-11"
+                                :class="shiftButtonClass"
                                 :disabled="form.processing"
                                 @click="selectAction(null)"
                             >
-                                Cancelar
+                                <span>Cancelar</span>
+                                <X data-icon="inline-end" aria-hidden="true" />
                             </Button>
                             <Button
                                 type="submit"
-                                class="min-h-11"
+                                :class="shiftButtonClass"
                                 :disabled="form.processing"
                             >
-                                {{ formCopy[action].submit }}
+                                <span>{{ formCopy[action].submit }}</span>
+                                <Check
+                                    data-icon="inline-end"
+                                    aria-hidden="true"
+                                />
                             </Button>
                         </div>
                     </form>
@@ -541,9 +618,13 @@ function submit() {
                 v-if="page.props.auth.cashShiftAccess"
                 as-child
                 variant="ghost"
-                class="min-h-11 sm:self-start lg:hidden"
+                :class="shiftButtonClass"
+                class="sm:self-start lg:hidden"
             >
-                <LogoutLink>Cambiar de sesión</LogoutLink>
+                <LogoutLink>
+                    <span>Cambiar de sesión</span>
+                    <LogOut data-icon="inline-end" aria-hidden="true" />
+                </LogoutLink>
             </Button>
         </section>
 

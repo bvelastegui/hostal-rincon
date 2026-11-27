@@ -7,6 +7,7 @@ use App\Http\Middleware\RestrictEmployeeDuringCashShift;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
 
@@ -27,7 +28,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ProtectSharedBrowserSession::class,
             RestrictEmployeeDuringCashShift::class,
             HandleInertiaRequests::class,
-            AddLinkHeadersForPreloadedAssets::class,
+            AddLinkHeadersForPreloadedAssets::using(12),
+            HandlePrecognitiveRequests::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

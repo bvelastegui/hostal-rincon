@@ -168,6 +168,19 @@ test('la configuración restaura un ZIP anterior con los cambios confirmados del
             ->and(BankAccount::count())->toBe(0)
             ->and(DB::table('cash_openings')->value('opening_balance_cents'))->toBeNull();
 
+        $this->post(route('initial-setup.restore'), [
+            'backup' => new UploadedFile($orphanedPath, 'inconsistente.zip', test: true),
+        ], ['Accept' => 'application/json', 'Precognition' => 'true'])
+            ->assertUnprocessable()->assertJsonValidationErrors('backup');
+
+        $this->post(route('initial-setup.restore'), ['backup' => $upload], [
+            'Accept' => 'application/json',
+            'Precognition' => 'true',
+        ])->assertNoContent()->assertHeader('Precognition-Success', 'true');
+        expect(User::count())->toBe(0)
+            ->and(BankAccount::count())->toBe(0)
+            ->and(DB::table('cash_openings')->value('opening_balance_cents'))->toBeNull();
+
         $this->post(route('initial-setup.restore'), ['backup' => $upload])->assertRedirectToRoute('login');
         $this->assertGuest();
         expect(DB::table('cash_openings')->value('opening_balance_cents'))->toBe(12550)

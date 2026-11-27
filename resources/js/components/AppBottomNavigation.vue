@@ -57,7 +57,7 @@ const moreIsActive = computed(() =>
     moreItems.value.some(({ active }) => active),
 );
 const tabClass =
-    'h-auto min-h-12 w-full flex-col gap-1 px-0 py-1 text-xs has-[>svg]:px-0 sm:text-sm';
+    'h-auto min-h-12 w-full flex-col justify-start gap-1 px-0 py-1 text-xs has-[>svg]:px-0 sm:text-sm';
 </script>
 
 <template>
@@ -72,7 +72,7 @@ const tabClass =
                 <li
                     v-for="item in mainItems"
                     :key="item.title"
-                    class="min-w-0 flex-1"
+                    class="flex min-w-0 flex-1"
                 >
                     <Button
                         as-child
@@ -89,13 +89,14 @@ const tabClass =
                                 aria-hidden="true"
                                 data-icon="inline-start"
                             />
-                            <span class="max-w-full truncate">{{
-                                item.title
-                            }}</span>
+                            <span
+                                class="max-w-full text-center leading-tight whitespace-normal"
+                                >{{ item.title }}</span
+                            >
                         </Link>
                     </Button>
                 </li>
-                <li v-if="moreItems.length" class="min-w-0 flex-1">
+                <li v-if="moreItems.length" class="flex min-w-0 flex-1">
                     <SheetTrigger as-child>
                         <Button
                             type="button"

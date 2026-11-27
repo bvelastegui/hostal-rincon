@@ -8,6 +8,7 @@ import {
 } from '@lucide/vue';
 import { computed } from 'vue';
 import { index as advances } from '@/actions/App/Http/Controllers/AdvanceController';
+import { advancesModuleTitle } from '@/lib/advances';
 import { dashboard } from '@/routes';
 import { index as cashShift } from '@/routes/cash-closings';
 import { index as movements } from '@/routes/movements';
@@ -37,7 +38,7 @@ export function useMainNavigation() {
             mobileMenu: page.props.auth.cashShiftAccess === null,
         },
         ...(page.props.auth.canManageAdvances
-            ? [{ title: 'Adelantos', href: advances(), icon: Wallet }]
+            ? [{ title: advancesModuleTitle, href: advances(), icon: Wallet }]
             : []),
         ...(page.props.auth.canViewMonthlyReport
             ? [

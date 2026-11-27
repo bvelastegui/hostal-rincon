@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { Check, Plus, TriangleAlert, X } from '@lucide/vue';
+import { Check, Plus, TriangleAlert, UserRoundPlus, X } from '@lucide/vue';
 import { computed, h, ref } from 'vue';
 import {
     correction,
@@ -35,6 +35,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { advancesModuleTitle } from '@/lib/advances';
 import { paymentOptions } from '@/lib/cash-movement';
 import { formatUsd } from '@/lib/money';
 import { reviewAmount } from '@/lib/record-confirmation';
@@ -83,7 +84,7 @@ const props = defineProps<{
 }>();
 
 defineOptions({
-    layout: { breadcrumbs: [{ title: 'Adelantos', href: index() }] },
+    layout: { breadcrumbs: [{ title: advancesModuleTitle, href: index() }] },
 });
 
 const date = new Intl.DateTimeFormat('es-EC', {
@@ -307,25 +308,36 @@ function confirmDeduction(): void {
 
 <template>
     <div class="space-y-6">
-        <Head title="Adelantos" />
+        <Head :title="advancesModuleTitle" />
         <header
             class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
         >
             <div class="space-y-1">
-                <h1 class="text-2xl font-semibold tracking-tight">Adelantos</h1>
+                <h1 class="text-2xl font-semibold tracking-tight">
+                    {{ advancesModuleTitle }}
+                </h1>
                 <p class="text-sm text-muted-foreground">
                     Consulta el límite y el saldo pendiente de cada empleado.
                 </p>
             </div>
-            <Button as-child class="min-h-11 w-full sm:w-auto">
-                <Link :href="createEmployee()">Agregar empleado</Link>
+            <Button as-child class="min-h-11 w-full justify-between sm:w-auto">
+                <Link :href="createEmployee()">
+                    <span>Agregar empleado</span>
+                    <UserRoundPlus data-icon="inline-end" aria-hidden="true" />
+                </Link>
             </Button>
         </header>
 
         <section
-            aria-label="Saldos por empleado"
+            aria-labelledby="advance-employees"
             class="grid gap-4 lg:grid-cols-2"
         >
+            <h2
+                id="advance-employees"
+                class="text-lg font-semibold lg:col-span-2"
+            >
+                Empleados
+            </h2>
             <Card
                 v-for="employee in employees"
                 :key="employee.id"
@@ -430,9 +442,7 @@ function confirmDeduction(): void {
                         </div>
                     </dl>
                 </CardContent>
-                <CardFooter
-                    class="mt-auto grid gap-2 px-4 py-4 sm:grid-cols-[1fr_1.2fr]"
-                >
+                <CardFooter class="mt-auto grid gap-2 px-4 py-4 sm:grid-cols-2">
                     <Button
                         :as="available(employee) ? Link : 'button'"
                         :href="
@@ -442,24 +452,27 @@ function confirmDeduction(): void {
                         "
                         :variant="available(employee) ? 'default' : 'secondary'"
                         :disabled="!available(employee)"
-                        class="min-h-11 w-full"
+                        class="h-full min-h-11 w-full justify-between py-2 text-left whitespace-normal"
                     >
-                        <Plus data-icon="inline-start" />
-                        Registrar adelanto
+                        <span>Registrar adelanto</span>
+                        <Plus data-icon="inline-end" aria-hidden="true" />
                     </Button>
                     <Button
                         type="button"
                         variant="outline"
-                        class="min-h-11 w-full"
+                        class="h-full min-h-11 w-full justify-between py-2 text-left whitespace-normal"
                         :disabled="!employee.pendingCents"
                         @click="openDeduction(employee)"
                     >
-                        <Check data-icon="inline-start" />
-                        Marcar como descontados
+                        <span>Marcar como descontados</span>
+                        <Check data-icon="inline-end" aria-hidden="true" />
                     </Button>
                 </CardFooter>
             </Card>
-            <p v-if="!employees.length" class="text-sm text-muted-foreground">
+            <p
+                v-if="!employees.length"
+                class="text-sm text-muted-foreground lg:col-span-2"
+            >
                 Todavía no hay empleados configurados. Usa “Agregar empleado”
                 para crear una cuenta.
             </p>

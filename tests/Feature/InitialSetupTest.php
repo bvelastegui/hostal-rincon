@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -62,6 +63,19 @@ test('Laravel valida la cuenta y el efectivo por paso sin guardar la configuraci
     $this->assertGuest();
     $this->assertDatabaseCount('users', 0);
     $this->assertDatabaseCount('bank_accounts', 0);
+    $this->assertDatabaseHas('cash_openings', ['opening_balance_cents' => null]);
+});
+
+test('rechaza la revisión de un respaldo ausente o inválido sin inicializar la instalación', function () {
+    $url = route('initial-setup.restore');
+    $review = ['Precognition' => 'true', 'Accept' => 'application/json'];
+
+    $this->post($url, [], $review)->assertUnprocessable()->assertJsonValidationErrors('backup');
+    $this->post($url, ['backup' => UploadedFile::fake()->createWithContent('respaldo.zip', 'contenido inválido')], $review)
+        ->assertUnprocessable()->assertJsonValidationErrors('backup');
+
+    $this->assertGuest();
+    $this->assertDatabaseCount('users', 0);
     $this->assertDatabaseHas('cash_openings', ['opening_balance_cents' => null]);
 });
 

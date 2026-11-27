@@ -15,6 +15,27 @@ test('requiere una cuenta autenticada', function () {
     $this->get(route('advances.index'))->assertRedirect(route('login'));
 });
 
+test('la revisión previa rechaza un adelanto que supera el cupo o los fondos disponibles', function () {
+    $this->actingAs(User::factory()->create(['is_admin' => true]));
+    $employee = User::factory()->create(['advance_limit_cents' => 5000]);
+    CashOpening::query()->update(['opening_balance_cents' => 4000]);
+
+    $url = route('advances.store', $employee);
+    $review = ['Precognition' => 'true'];
+    $entry = ['request_id' => (string) Str::uuid(), 'payment_method' => 'cash'];
+
+    $this->postJson($url, [...$entry, 'amount' => '50.01'], $review)
+        ->assertUnprocessable()->assertJsonValidationErrors('amount')
+        ->assertJsonPath('errors.amount.0', 'El monto supera el disponible de USD 50,00.');
+    $this->postJson($url, [...$entry, 'amount' => '40.01'], $review)
+        ->assertUnprocessable()->assertJsonValidationErrors('amount')
+        ->assertJsonPath('errors.amount.0', 'El monto supera el saldo disponible en caja: USD 40,00.');
+    $this->postJson($url, [...$entry, 'amount' => '40.00'], $review)->assertNoContent();
+
+    $this->assertDatabaseCount('advances', 0);
+    $this->assertDatabaseCount('cash_movements', 0);
+});
+
 test('permite llegar a 300 y no duplica el registro al reenviar la solicitud', function () {
     $administrator = User::factory()->create(['is_admin' => true]);
     $employee = User::factory()->create();

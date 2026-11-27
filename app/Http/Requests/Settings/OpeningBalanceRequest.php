@@ -3,9 +3,11 @@
 namespace App\Http\Requests\Settings;
 
 use App\Actions\ConvertUsdToCents;
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\ReviewableRequest;
+use App\Models\CashOpening;
+use Illuminate\Validation\Validator;
 
-class OpeningBalanceRequest extends FormRequest
+class OpeningBalanceRequest extends ReviewableRequest
 {
     protected function prepareForValidation(): void
     {
@@ -22,6 +24,13 @@ class OpeningBalanceRequest extends FormRequest
         return [
             'opening_balance' => ['required', ...ConvertUsdToCents::OPENING_BALANCE_RULES],
         ];
+    }
+
+    protected function review(Validator $validator): void
+    {
+        if (CashOpening::query()->sole()->opening_locked_at !== null) {
+            $validator->errors()->add('opening_balance', 'El saldo inicial ya se usó en un movimiento.');
+        }
     }
 
     public function balanceCents(): int
