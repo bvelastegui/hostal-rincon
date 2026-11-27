@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Concerns\PasswordValidationRules;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Validation\Validator;
 use Laravel\Fortify\Features;
 
@@ -19,7 +20,7 @@ class ResetPasswordReviewRequest extends ReviewableRequest
         return true;
     }
 
-    /** @return array<string, list<string>> */
+    /** @return array<string, list<string|PasswordRule>> */
     public function rules(): array
     {
         return [

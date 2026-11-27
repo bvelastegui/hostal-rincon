@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Actions\CalculateCashBalances;
 use App\Actions\ConvertUsdToCents;
 use App\Actions\CorrectCashMovement;
+use App\Models\Advance;
 use App\Models\CashShift;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
@@ -52,6 +53,8 @@ class StoreAdvanceRequest extends ConfirmCashMovementRequest
     protected function review(Validator $validator): void
     {
         $advance = $this->route('advance');
+        abort_unless($advance === null || $advance instanceof Advance, 404);
+
         $employee = $this->route('employee') ?? $advance?->employee;
         abort_unless($employee instanceof User && ! $employee->is_admin, 404);
         $original = $advance?->cashMovement;
@@ -78,7 +81,7 @@ class StoreAdvanceRequest extends ConfirmCashMovementRequest
         }
 
         $pending = (int) $employee->pendingAdvances()->sum('amount_cents');
-        $remaining = $employee->remainingAdvanceCents($pending - ($advance?->amount_cents ?? 0));
+        $remaining = $employee->remainingAdvanceCents($pending - ($advance->amount_cents ?? 0));
         if ($this->amountCents() > $remaining) {
             $available = number_format($remaining / 100, 2, ',', '.');
             $validator->errors()->add('amount', "El monto supera el disponible de USD {$available}.");

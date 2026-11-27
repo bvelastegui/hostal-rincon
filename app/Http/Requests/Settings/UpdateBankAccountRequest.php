@@ -22,6 +22,8 @@ class UpdateBankAccountRequest extends OpeningBalanceRequest
     protected function review(Validator $validator): void
     {
         $account = $this->route('account');
+        abort_unless($account instanceof BankAccount, 404);
+
         if ($this->filled('opening_balance') && $account->opening_locked_at !== null
             && $this->balanceCents() !== $account->opening_balance_cents) {
             $validator->errors()->add('opening_balance', 'El saldo inicial ya se usó en un movimiento.');

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\CashClosing;
 use Illuminate\Validation\Validator;
 
 class ResolveCashShortageRequest extends ReviewableRequest
@@ -23,7 +24,10 @@ class ResolveCashShortageRequest extends ReviewableRequest
 
     protected function review(Validator $validator): void
     {
-        if ($this->route('closing')->difference_cents >= 0) {
+        $closing = $this->route('closing');
+        abort_unless($closing instanceof CashClosing, 404);
+
+        if ($closing->difference_cents >= 0) {
             $validator->errors()->add('method', 'Solo se pueden resolver registros con faltante.');
         }
     }

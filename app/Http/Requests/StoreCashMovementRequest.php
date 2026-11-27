@@ -74,6 +74,8 @@ class StoreCashMovementRequest extends ConfirmCashMovementRequest
         $kind = $this->input('kind');
         $transfer = $kind !== 'deposit' && $this->input('payment_method') === 'transfer';
         $original = $this->route('movement');
+        abort_unless($original === null || $original instanceof CashMovement, 404);
+
         $confirmedDeposit = $kind === 'deposit' && $original?->confirmed_at !== null;
         $account = $transfer || $confirmedDeposit
             ? $this->reviewBankAccount($this->integer('bank_account_id'))

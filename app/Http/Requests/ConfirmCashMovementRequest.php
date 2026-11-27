@@ -47,6 +47,8 @@ class ConfirmCashMovementRequest extends ReviewableRequest
     protected function review(Validator $validator): void
     {
         $movement = $this->route('movement');
+        abort_unless($movement instanceof CashMovement, 404);
+
         $shift = CashShift::active();
         $user = $this->user();
 
