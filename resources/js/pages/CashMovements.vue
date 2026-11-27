@@ -44,6 +44,12 @@ defineOptions({
     layout: { breadcrumbs: [{ title: 'Movimientos', href: index() }] },
 });
 
+const movementActions = [
+    { kind: 'income', label: 'Nuevo ingreso', icon: ArrowDownLeft },
+    { kind: 'expense', label: 'Nuevo egreso', icon: ArrowUpRight },
+    { kind: 'deposit', label: 'Nuevo depósito', icon: Landmark },
+] as const;
+
 const all = 'all';
 const search = useForm({
     date: props.dateRange?.explicit ? '' : (props.date ?? ''),
@@ -172,38 +178,22 @@ const balances = computed(() => [
             <h1 class="text-2xl font-semibold tracking-tight">Movimientos</h1>
             <div
                 v-if="!movementRestriction"
-                class="grid grid-cols-2 gap-2 sm:grid-cols-3"
+                class="grid gap-2 sm:grid-cols-3 lg:w-full lg:max-w-lg"
             >
-                <Button as-child class="min-h-11 px-2 sm:px-4">
-                    <Link :href="create({ query: { kind: 'income' } })">
-                        <ArrowDownLeft
-                            data-icon="inline-start"
+                <Button
+                    v-for="action in movementActions"
+                    :key="action.kind"
+                    as-child
+                    :variant="action.kind === 'income' ? 'default' : 'outline'"
+                    class="h-full min-h-11 w-full justify-between py-2 text-left whitespace-normal"
+                >
+                    <Link :href="create({ query: { kind: action.kind } })">
+                        <span>{{ action.label }}</span>
+                        <component
+                            :is="action.icon"
+                            data-icon="inline-end"
                             aria-hidden="true"
                         />
-                        Nuevo ingreso
-                    </Link>
-                </Button>
-                <Button
-                    as-child
-                    variant="outline"
-                    class="min-h-11 px-2 sm:px-4"
-                >
-                    <Link :href="create({ query: { kind: 'expense' } })">
-                        <ArrowUpRight
-                            data-icon="inline-start"
-                            aria-hidden="true"
-                        />
-                        Nuevo egreso
-                    </Link>
-                </Button>
-                <Button
-                    as-child
-                    variant="outline"
-                    class="col-span-2 min-h-11 px-2 sm:col-span-1 sm:px-4"
-                >
-                    <Link :href="create({ query: { kind: 'deposit' } })">
-                        <Landmark data-icon="inline-start" aria-hidden="true" />
-                        Nuevo depósito
                     </Link>
                 </Button>
             </div>

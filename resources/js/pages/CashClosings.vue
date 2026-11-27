@@ -1,5 +1,16 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import {
+    ArrowDownLeft,
+    ArrowLeftRight,
+    ArrowUpRight,
+    Check,
+    ClipboardCheck,
+    LockKeyhole,
+    LogOut,
+    Play,
+    X,
+} from '@lucide/vue';
 import { computed, ref } from 'vue';
 import CashClosingHistory from '@/components/CashClosingHistory.vue';
 import LogoutLink from '@/components/LogoutLink.vue';
@@ -62,6 +73,9 @@ const form = useForm({
     expected_cash_cents: null as number | null,
     cash_shift_id: null as number | null,
 });
+
+const shiftButtonClass =
+    'h-auto min-h-11 w-full justify-between py-2 text-left whitespace-normal sm:w-60';
 
 const assignment = useForm({ responsible_id: '' });
 const page = usePage();
@@ -244,9 +258,15 @@ function submit() {
                     v-if="page.props.auth.cashShiftAccess !== 'restricted'"
                     as-child
                     variant="outline"
-                    class="min-h-11"
+                    :class="shiftButtonClass"
                 >
-                    <Link :href="movements()">Volver a movimientos</Link>
+                    <Link :href="movements()">
+                        <span>Volver a movimientos</span>
+                        <ArrowLeftRight
+                            data-icon="inline-end"
+                            aria-hidden="true"
+                        />
+                    </Link>
                 </Button>
             </header>
 
@@ -341,13 +361,15 @@ function submit() {
                         />
                         <Button
                             type="submit"
-                            class="min-h-11 sm:self-end"
+                            :class="shiftButtonClass"
+                            class="sm:self-end"
                             :disabled="
                                 assignment.processing ||
                                 !assignment.responsible_id
                             "
                         >
-                            Iniciar turno
+                            <span>Iniciar turno</span>
+                            <Play data-icon="inline-end" aria-hidden="true" />
                         </Button>
                     </form>
                     <div
@@ -366,10 +388,15 @@ function submit() {
                         </p>
                         <Button
                             type="button"
-                            class="min-h-11 sm:self-start"
+                            :class="shiftButtonClass"
+                            class="sm:self-start"
                             @click="selectAction('deliver')"
                         >
-                            Entregar turno
+                            <span>Entregar turno</span>
+                            <ArrowUpRight
+                                data-icon="inline-end"
+                                aria-hidden="true"
+                            />
                         </Button>
                     </div>
                     <div
@@ -383,10 +410,16 @@ function submit() {
                             </p>
                             <Button
                                 type="button"
-                                class="min-h-11 sm:self-start"
+                                :class="shiftButtonClass"
+                                class="sm:self-start"
                                 @click="selectAction('receive')"
-                                >Recibir turno</Button
                             >
+                                <span>Recibir turno</span>
+                                <ArrowDownLeft
+                                    data-icon="inline-end"
+                                    aria-hidden="true"
+                                />
+                            </Button>
                         </div>
                         <div class="flex flex-col gap-2">
                             <p class="text-sm text-muted-foreground">
@@ -396,19 +429,30 @@ function submit() {
                             <Button
                                 type="button"
                                 variant="outline"
-                                class="min-h-11 sm:self-start"
+                                :class="shiftButtonClass"
+                                class="sm:self-start"
                                 @click="selectAction('close')"
-                                >Hacer cierre independiente</Button
                             >
+                                <span>Hacer cierre independiente</span>
+                                <ClipboardCheck
+                                    data-icon="inline-end"
+                                    aria-hidden="true"
+                                />
+                            </Button>
                         </div>
                         <Button
                             v-if="activeShift"
                             type="button"
                             variant="destructive"
-                            class="min-h-11 sm:self-start"
+                            :class="shiftButtonClass"
+                            class="sm:self-start"
                             @click="selectAction('administrative')"
                         >
-                            Cerrar turno como administradora
+                            <span>Cerrar turno como administradora</span>
+                            <LockKeyhole
+                                data-icon="inline-end"
+                                aria-hidden="true"
+                            />
                         </Button>
                     </div>
                     <p
@@ -541,24 +585,29 @@ function submit() {
                             }}
                         </FieldError>
                         <div
-                            class="flex flex-col gap-2 sm:flex-row sm:justify-end"
+                            class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end"
                         >
                             <Button
                                 v-if="canClose || action === 'deliver'"
                                 type="button"
                                 variant="outline"
-                                class="min-h-11"
+                                :class="shiftButtonClass"
                                 :disabled="form.processing"
                                 @click="selectAction(null)"
                             >
-                                Cancelar
+                                <span>Cancelar</span>
+                                <X data-icon="inline-end" aria-hidden="true" />
                             </Button>
                             <Button
                                 type="submit"
-                                class="min-h-11"
+                                :class="shiftButtonClass"
                                 :disabled="form.processing"
                             >
-                                {{ formCopy[action].submit }}
+                                <span>{{ formCopy[action].submit }}</span>
+                                <Check
+                                    data-icon="inline-end"
+                                    aria-hidden="true"
+                                />
                             </Button>
                         </div>
                     </form>
@@ -569,9 +618,13 @@ function submit() {
                 v-if="page.props.auth.cashShiftAccess"
                 as-child
                 variant="ghost"
-                class="min-h-11 sm:self-start lg:hidden"
+                :class="shiftButtonClass"
+                class="sm:self-start lg:hidden"
             >
-                <LogoutLink>Cambiar de sesión</LogoutLink>
+                <LogoutLink>
+                    <span>Cambiar de sesión</span>
+                    <LogOut data-icon="inline-end" aria-hidden="true" />
+                </LogoutLink>
             </Button>
         </section>
 

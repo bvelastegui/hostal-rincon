@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { Check, Pencil, Plus, TriangleAlert, X } from '@lucide/vue';
+import { Check, Plus, TriangleAlert, UserRoundPlus, X } from '@lucide/vue';
 import { computed, h, ref } from 'vue';
 import {
     correction,
@@ -320,8 +320,11 @@ function confirmDeduction(): void {
                     Consulta el límite y el saldo pendiente de cada empleado.
                 </p>
             </div>
-            <Button as-child class="min-h-11 w-full sm:w-auto">
-                <Link :href="createEmployee()">Agregar empleado</Link>
+            <Button as-child class="min-h-11 w-full justify-between sm:w-auto">
+                <Link :href="createEmployee()">
+                    <span>Agregar empleado</span>
+                    <UserRoundPlus data-icon="inline-end" aria-hidden="true" />
+                </Link>
             </Button>
         </header>
 
@@ -381,10 +384,7 @@ function confirmDeduction(): void {
                         size="sm"
                         class="min-h-10 shrink-0 text-primary"
                     >
-                        <Link :href="editEmployee(employee.id)">
-                            <span>Editar</span>
-                            <Pencil data-icon="inline-end" aria-hidden="true" />
-                        </Link>
+                        <Link :href="editEmployee(employee.id)">Editar</Link>
                     </Button>
                 </CardHeader>
                 <CardContent class="border-y px-0">
@@ -442,9 +442,7 @@ function confirmDeduction(): void {
                         </div>
                     </dl>
                 </CardContent>
-                <CardFooter
-                    class="mt-auto grid gap-2 px-4 py-4 sm:grid-cols-[1fr_1.2fr]"
-                >
+                <CardFooter class="mt-auto grid gap-2 px-4 py-4 sm:grid-cols-2">
                     <Button
                         :as="available(employee) ? Link : 'button'"
                         :href="
