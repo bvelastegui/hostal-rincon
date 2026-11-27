@@ -4,6 +4,13 @@ El proyecto usa versionamiento semántico (`MAJOR.MINOR.PATCH`). Incrementa `MAJ
 
 Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la fecha en formato `AAAA-MM-DD` y etiqueta el commit de la entrega con `vMAJOR.MINOR.PATCH`.
 
+## 1.0.1 (prevista)
+
+- Laravel valida los formularios antes de mostrar la confirmación. Si hay errores, aparecen en los campos para corregirlos antes de guardar. [HR-22](https://nexodigital.youtrack.cloud/issue/HR-22)
+- El menú y la vista **Empleados y Adelantos** facilitan encontrar la gestión de empleados y el historial de adelantos. [HR-21](https://nexodigital.youtrack.cloud/issue/HR-21)
+- Se alinean los íconos del encabezado y se unifica el ancho de las acciones principales en **Empleados y Adelantos**, **Turno** y **Movimientos**.
+- Vite limita la precarga de recursos en la cabecera HTTP `Link` para evitar que Nginx rechace respuestas de staging por exceder el tamaño de cabecera del upstream.
+
 ## 1.0.0 — 2026-11-26
 
 - Administración puede configurar el límite de adelantos de cada empleado. Las cuentas existentes parten de USD 300. Si el límite baja por debajo del saldo pendiente, se bloquean nuevos adelantos hasta recuperar cupo. USD 0 deshabilita nuevos registros. [HR-13](https://nexodigital.youtrack.cloud/issue/HR-13)
