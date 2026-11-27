@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import type { FormComponentRef } from '@inertiajs/core';
 import { Form, Head, Link, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 import {
     index,
     storeEmployee,
@@ -21,6 +22,7 @@ import {
     fieldValue,
     reviewAmount,
     reviewSubmission,
+    inertiaValidation,
 } from '@/lib/record-confirmation';
 
 const props = defineProps<{
@@ -63,6 +65,8 @@ function employeeReview(data: FormData) {
         details: [fieldValue(data, 'name')],
     };
 }
+
+const reviewForm = useTemplateRef<FormComponentRef>('reviewForm');
 </script>
 
 <template>
@@ -76,10 +80,17 @@ function employeeReview(data: FormData) {
         </header>
 
         <Form
+            ref="reviewForm"
             novalidate
             v-bind="action"
             v-slot="{ errors, processing }"
-            @submit.capture="reviewSubmission($event, employeeReview)"
+            @submit.capture="
+                reviewSubmission(
+                    $event,
+                    employeeReview,
+                    inertiaValidation(reviewForm),
+                )
+            "
         >
             <FieldGroup class="gap-5">
                 <Field :data-invalid="!!errors.name">

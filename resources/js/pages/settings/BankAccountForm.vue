@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import type { FormComponentRef } from '@inertiajs/core';
 import { Form, Head, Link } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 import {
     storeAccount,
     updateAccount,
@@ -27,6 +28,7 @@ import {
     fieldValue,
     reviewAmount,
     reviewSubmission,
+    inertiaValidation,
 } from '@/lib/record-confirmation';
 import { edit } from '@/routes/bank-settings';
 const props = defineProps<{
@@ -73,6 +75,8 @@ function accountReview(data: FormData) {
         details: [bank, fieldValue(data, 'name')],
     };
 }
+
+const reviewForm = useTemplateRef<FormComponentRef>('reviewForm');
 </script>
 
 <template>
@@ -80,13 +84,20 @@ function accountReview(data: FormData) {
         <Head :title="title" />
         <Heading variant="small" :title="title" />
         <Form
+            ref="reviewForm"
             novalidate
             v-if="account || banks.length"
             :key="account?.id ?? 'new'"
             v-bind="formAction"
             v-slot="{ errors, processing }"
             error-bag="bankAccount"
-            @submit.capture="reviewSubmission($event, accountReview)"
+            @submit.capture="
+                reviewSubmission(
+                    $event,
+                    accountReview,
+                    inertiaValidation(reviewForm),
+                )
+            "
         >
             <FieldGroup class="gap-5">
                 <Field

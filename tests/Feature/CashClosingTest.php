@@ -18,6 +18,23 @@ test('los operadores pueden ver el turno pero no consultar el historial ni hacer
     $this->post(route('cash-closings.start-shift'))->assertForbidden();
 });
 
+test('la revisión previa de un cierre con descuadre exige una observación', function () {
+    $this->actingAs(User::factory()->create(['is_admin' => true]));
+    CashOpening::query()->update(['opening_balance_cents' => 20000]);
+    $url = route('cash-closings.store');
+    $review = ['Precognition' => 'true'];
+    $entry = [
+        'request_id' => (string) Str::uuid(),
+        'expected_cash_cents' => 20000,
+        'counted_cash' => '195,00',
+    ];
+
+    $this->postJson($url, $entry, $review)
+        ->assertUnprocessable()->assertJsonValidationErrors('note');
+    $this->postJson($url, [...$entry, 'note' => 'Faltan cinco dólares.'], $review)->assertNoContent();
+    $this->assertDatabaseCount('cash_closings', 0);
+});
+
 test('atribuye el descuadre al turno y ajusta el saldo una sola vez sin cambiar de responsable', function (string $counted, int $cents, int $difference, ?string $note) {
     $admin = User::factory()->create(['is_admin' => true]);
     $responsible = User::factory()->create();

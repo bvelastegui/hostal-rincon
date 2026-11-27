@@ -73,7 +73,7 @@ final class CalculateCashBalances
         return $account->opening_balance_cents + $this->bankChange($totals);
     }
 
-    public function ensureFundsAvailable(int $amountCents, ?BankAccount $account, bool $revealBalance = true): void
+    public function ensureFundsAvailable(int $amountCents, ?BankAccount $account, bool $revealBalance = true, int $creditCents = 0): void
     {
         $balanceCents = $account === null
             ? $this->handle(includeTransit: true)['cash']
@@ -82,6 +82,8 @@ final class CalculateCashBalances
         if ($balanceCents === null) {
             throw ValidationException::withMessages(['amount' => 'La administradora debe registrar el saldo inicial de efectivo.']);
         }
+
+        $balanceCents += $creditCents;
 
         if ($amountCents > $balanceCents) {
             $available = number_format(max(0, $balanceCents) / 100, 2, ',', '.');

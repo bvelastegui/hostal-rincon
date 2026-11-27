@@ -2,9 +2,15 @@
 
 namespace App\Http\Requests;
 
+use App\Actions\CalculateCashBalances;
 use App\Actions\ConvertUsdToCents;
+use App\Actions\CorrectCashMovement;
+use App\Models\Bank;
 use App\Models\CashMovement;
+use App\Models\CashOpening;
+use App\Models\CashShift;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Validator;
 
 class StoreCashMovementRequest extends ConfirmCashMovementRequest
 {
@@ -61,6 +67,63 @@ class StoreCashMovementRequest extends ConfirmCashMovementRequest
     public function attributes(): array
     {
         return ['void_reason' => 'motivo de anulación'];
+    }
+
+    protected function review(Validator $validator): void
+    {
+        $kind = $this->input('kind');
+        $transfer = $kind !== 'deposit' && $this->input('payment_method') === 'transfer';
+        $original = $this->route('movement');
+        $confirmedDeposit = $kind === 'deposit' && $original?->confirmed_at !== null;
+        $account = $transfer || $confirmedDeposit
+            ? $this->reviewBankAccount($this->integer('bank_account_id'))
+            : null;
+        $user = $this->user();
+
+        $shift = CashShift::active();
+        if ($restriction = CashShift::movementRestriction($user, $shift)) {
+            $validator->errors()->add('movement', $restriction);
+
+            return;
+        }
+
+        if ($original !== null) {
+            $corrections = app(CorrectCashMovement::class);
+            if ($blocked = $corrections->blockedReason($original, $shift, $corrections->lastClosing($shift))) {
+                $validator->errors()->add('movement', $blocked);
+
+                return;
+            }
+        }
+
+        if ($transfer || $confirmedDeposit) {
+            $bank = $this->filled('origin_bank_id')
+                ? Bank::query()->findOrFail($this->integer('origin_bank_id'))
+                : $account->bank;
+            if (! $bank->is_active) {
+                $validator->errors()->add('origin_bank_id', 'Selecciona un banco de origen activo.');
+
+                return;
+            }
+
+            $this->reviewVoucher($validator, $this->input('voucher'), $bank->id, $original?->id,
+                required: $kind === 'expense' || $confirmedDeposit || $this->boolean('confirm'));
+        }
+
+        if ($kind === 'income' && ! $transfer && CashOpening::query()->sole()->opening_balance_cents === null) {
+            $validator->errors()->add('amount', 'La administradora debe registrar el saldo inicial de efectivo.');
+        }
+
+        if (in_array($kind, ['deposit', 'expense'], true)) {
+            $fundsAccount = $kind === 'deposit' ? null : $account;
+            $credit = $original !== null && ($kind === 'deposit' || $fundsAccount?->id === $original->bank_account_id)
+                ? $original->amount_cents
+                : 0;
+            app(CalculateCashBalances::class)->ensureFundsAvailable(
+                $this->amountCents(), $fundsAccount, revealBalance: $fundsAccount === null || $user->is_admin,
+                creditCents: $credit,
+            );
+        }
     }
 
     public function amountCents(): int

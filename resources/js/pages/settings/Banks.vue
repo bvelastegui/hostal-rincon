@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import type { FormComponentRef } from '@inertiajs/core';
 import { Form, Head, Link } from '@inertiajs/vue3';
 import { Pencil } from '@lucide/vue';
-import { computed } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 import {
     storeBank,
     updateBankStatus,
@@ -23,6 +24,7 @@ import {
     confirmRecord,
     fieldValue,
     reviewSubmission,
+    inertiaValidation,
 } from '@/lib/record-confirmation';
 import { edit } from '@/routes/bank-settings';
 import { create, edit as editAccount } from '@/routes/bank-settings/accounts';
@@ -49,6 +51,8 @@ defineOptions({
         breadcrumbs: [{ title: 'Bancos', href: edit() }],
     },
 });
+
+const reviewForm = useTemplateRef<FormComponentRef>('reviewForm');
 </script>
 
 <template>
@@ -132,17 +136,22 @@ defineOptions({
         >
             <div class="flex flex-col gap-4">
                 <Form
+                    ref="reviewForm"
                     novalidate
                     v-bind="storeBank.form()"
                     v-slot="{ errors, processing }"
                     error-bag="createBank"
                     @submit.capture="
-                        reviewSubmission($event, (data) => ({
-                            title: 'Confirmar registro del banco',
-                            description:
-                                'El banco quedará habilitado para seleccionarlo al registrar transferencias.',
-                            details: [fieldValue(data, 'name')],
-                        }))
+                        reviewSubmission(
+                            $event,
+                            (data) => ({
+                                title: 'Confirmar registro del banco',
+                                description:
+                                    'El banco quedará habilitado para seleccionarlo al registrar transferencias.',
+                                details: [fieldValue(data, 'name')],
+                            }),
+                            inertiaValidation(reviewForm),
+                        )
                     "
                     reset-on-success
                 >

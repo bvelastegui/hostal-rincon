@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useTemplateRef } from 'vue';
+import type { FormComponentRef } from '@inertiajs/core';
 import { Form, Head } from '@inertiajs/vue3';
 import SecurityController from '@/actions/App/Http/Controllers/Settings/SecurityController';
 import Heading from '@/components/Heading.vue';
@@ -6,7 +8,7 @@ import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { reviewSubmission } from '@/lib/record-confirmation';
+import { reviewSubmission, inertiaValidation } from '@/lib/record-confirmation';
 import { edit } from '@/routes/security';
 
 // oxfmt-ignore
@@ -26,6 +28,8 @@ defineOptions({
         ],
     },
 });
+
+const reviewForm = useTemplateRef<FormComponentRef>('reviewForm');
 </script>
 
 <template>
@@ -39,14 +43,19 @@ defineOptions({
         />
 
         <Form
+            ref="reviewForm"
             novalidate
             v-bind="SecurityController.update.form()"
             @submit.capture="
-                reviewSubmission($event, {
-                    title: 'Confirmar cambio de contraseña',
-                    description:
-                        'Usarás la nueva contraseña la próxima vez que inicies sesión.',
-                })
+                reviewSubmission(
+                    $event,
+                    {
+                        title: 'Confirmar cambio de contraseña',
+                        description:
+                            'Usarás la nueva contraseña la próxima vez que inicies sesión.',
+                    },
+                    inertiaValidation(reviewForm),
+                )
             "
             autocomplete="off"
             :options="{

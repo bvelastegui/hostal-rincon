@@ -23,6 +23,7 @@ import {
     fieldValue,
     reviewAmount,
     reviewSubmission,
+    inertiaValidation,
 } from '@/lib/record-confirmation';
 import { restore, store } from '@/routes/initial-setup';
 
@@ -199,6 +200,8 @@ function showStepWithErrors(errors: Errors) {
         goTo('banks');
     }
 }
+
+const restoreForm = useTemplateRef<FormComponentRef>('restoreForm');
 </script>
 
 <template>
@@ -264,7 +267,13 @@ function showStepWithErrors(errors: Errors) {
         v-bind="store.form()"
         v-slot="{ errors, processing, validating, clearErrors }"
         :on-before="nextOrSubmit"
-        @submit.capture="reviewSubmission($event, setupReview)"
+        @submit.capture="
+            reviewSubmission(
+                $event,
+                setupReview,
+                inertiaValidation(setupForm, showStepWithErrors),
+            )
+        "
         @error="showStepWithErrors"
         autocomplete="off"
         novalidate
@@ -462,9 +471,16 @@ function showStepWithErrors(errors: Errors) {
     </Form>
 
     <Form
+        ref="restoreForm"
         v-if="step === 'backup'"
         v-bind="restore.form()"
-        @submit.capture="reviewSubmission($event, restoreReview)"
+        @submit.capture="
+            reviewSubmission(
+                $event,
+                restoreReview,
+                inertiaValidation(restoreForm),
+            )
+        "
         v-slot="{ errors, processing }"
         novalidate
         disable-while-processing

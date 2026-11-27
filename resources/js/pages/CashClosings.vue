@@ -14,7 +14,11 @@ import {
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { formatCashDifference, formatUsd } from '@/lib/money';
-import { reviewAmount, reviewSubmission } from '@/lib/record-confirmation';
+import {
+    reviewAmount,
+    reviewSubmission,
+    showValidationErrors,
+} from '@/lib/record-confirmation';
 import {
     administrativeClose,
     index,
@@ -182,34 +186,40 @@ function closingReview() {
     };
 }
 
+const closingRoutes = {
+    deliver: prepareHandoff(),
+    receive: receiveShift(),
+    close: store(),
+    administrative: administrativeClose(),
+    opening: openOwnShift(),
+};
+const closingRoute = computed(() =>
+    action.value ? closingRoutes[action.value] : undefined,
+);
+
+function closingPayload() {
+    return {
+        ...form.data(),
+        request_id: props.requestId,
+        expected_cash_cents: props.expectedCashCents,
+        cash_shift_id: props.activeShift?.id ?? null,
+    };
+}
+
 function submit() {
     if (!action.value) {
         return;
     }
 
-    form.transform((data) => ({
-        ...data,
-        request_id: props.requestId,
-        expected_cash_cents: props.expectedCashCents,
-        cash_shift_id: props.activeShift?.id ?? null,
-    })).submit(
-        {
-            deliver: prepareHandoff(),
-            receive: receiveShift(),
-            close: store(),
-            administrative: administrativeClose(),
-            opening: openOwnShift(),
-        }[action.value],
-        {
-            preserveScroll: true,
-            onBefore: () => {
-                if (action.value === 'deliver') {
-                    router.flushAll();
-                }
-            },
-            onSuccess: () => selectAction(null),
+    form.transform(closingPayload).submit(closingRoutes[action.value], {
+        preserveScroll: true,
+        onBefore: () => {
+            if (action.value === 'deliver') {
+                router.flushAll();
+            }
         },
-    );
+        onSuccess: () => selectAction(null),
+    });
 }
 </script>
 
@@ -288,25 +298,36 @@ function submit() {
                         v-if="!activeShift && canClose && !action"
                         class="flex flex-col gap-4"
                         @submit.capture="
-                            reviewSubmission($event, {
-                                title: 'Confirmar inicio de turno',
-                                description:
-                                    'La caja quedará a cargo del responsable seleccionado.',
-                                amounts: [
-                                    reviewAmount(
-                                        'Efectivo disponible (USD)',
-                                        expectedCashCents,
+                            reviewSubmission(
+                                $event,
+                                {
+                                    title: 'Confirmar inicio de turno',
+                                    description:
+                                        'La caja quedará a cargo del responsable seleccionado.',
+                                    amounts: [
+                                        reviewAmount(
+                                            'Efectivo disponible (USD)',
+                                            expectedCashCents,
+                                        ),
+                                    ],
+                                    details: [
+                                        responsibleOptions.find(
+                                            (option) =>
+                                                option.value ===
+                                                assignment.responsible_id,
+                                        )?.label,
+                                    ],
+                                    confirmLabel: 'Iniciar turno',
+                                },
+                                {
+                                    ...showValidationErrors(
+                                        () => assignment.clearErrors(),
+                                        (errors) => assignment.setError(errors),
                                     ),
-                                ],
-                                details: [
-                                    responsibleOptions.find(
-                                        (option) =>
-                                            option.value ===
-                                            assignment.responsible_id,
-                                    )?.label,
-                                ],
-                                confirmLabel: 'Iniciar turno',
-                            })
+                                    route: startShift(),
+                                    data: assignment.data(),
+                                },
+                            )
                         "
                         @submit.prevent="assignment.submit(startShift())"
                     >
@@ -412,7 +433,14 @@ function submit() {
                         v-else-if="expectedCashCents !== null && action"
                         class="flex flex-col gap-5"
                         @submit.capture="
-                            reviewSubmission($event, closingReview)
+                            reviewSubmission($event, closingReview, {
+                                ...showValidationErrors(
+                                    () => form.clearErrors(),
+                                    (errors) => form.setError(errors),
+                                ),
+                                route: closingRoute,
+                                data: closingPayload(),
+                            })
                         "
                         @submit.prevent="submit"
                     >

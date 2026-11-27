@@ -7,6 +7,7 @@ use App\Actions\CreateBankAccount;
 use App\Actions\CreateEmployee;
 use App\Actions\RestoreLocalBackup;
 use App\Http\Requests\InitialSetupRequest;
+use App\Http\Requests\RestoreBackupRequest;
 use App\Models\Bank;
 use App\Models\BankAccount;
 use App\Models\CashOpening;
@@ -114,12 +115,8 @@ class InitialSetupController extends Controller implements HasMiddleware
         return to_route('dashboard');
     }
 
-    public function restore(Request $request, RestoreLocalBackup $restore): RedirectResponse
+    public function restore(RestoreBackupRequest $request, RestoreLocalBackup $restore): RedirectResponse
     {
-        $request->validate(['backup' => ['required', 'file', 'extensions:zip', 'max:65536']], [], [
-            'backup' => 'respaldo',
-        ]);
-
         $restore->handle($request->file('backup'));
 
         Inertia::flash('toast', [

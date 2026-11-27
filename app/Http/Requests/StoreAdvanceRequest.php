@@ -2,8 +2,13 @@
 
 namespace App\Http\Requests;
 
+use App\Actions\CalculateCashBalances;
 use App\Actions\ConvertUsdToCents;
+use App\Actions\CorrectCashMovement;
+use App\Models\CashShift;
+use App\Models\User;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Validator;
 
 class StoreAdvanceRequest extends ConfirmCashMovementRequest
 {
@@ -42,6 +47,56 @@ class StoreAdvanceRequest extends ConfirmCashMovementRequest
             'bank_account_id.exists' => 'Selecciona una cuenta bancaria registrada.',
             'voucher.required' => 'Ingresa el número de voucher de la transferencia.',
         ];
+    }
+
+    protected function review(Validator $validator): void
+    {
+        $advance = $this->route('advance');
+        $employee = $this->route('employee') ?? $advance?->employee;
+        abort_unless($employee instanceof User && ! $employee->is_admin, 404);
+        $original = $advance?->cashMovement;
+        if ($advance !== null) {
+            if ($advance->deducted_at !== null) {
+                $validator->errors()->add('amount', 'El adelanto ya fue descontado.');
+
+                return;
+            }
+
+            if ($original?->kind !== 'advance' || $original->confirmed_at === null) {
+                $validator->errors()->add('amount', 'El adelanto no tiene un egreso confirmado que se pueda corregir.');
+
+                return;
+            }
+
+            $shift = CashShift::active();
+            $corrections = app(CorrectCashMovement::class);
+            if ($blocked = $corrections->blockedReason($original, $shift, $corrections->lastClosing($shift), forAdvance: true)) {
+                $validator->errors()->add('amount', $blocked);
+
+                return;
+            }
+        }
+
+        $pending = (int) $employee->pendingAdvances()->sum('amount_cents');
+        $remaining = $employee->remainingAdvanceCents($pending - ($advance?->amount_cents ?? 0));
+        if ($this->amountCents() > $remaining) {
+            $available = number_format($remaining / 100, 2, ',', '.');
+            $validator->errors()->add('amount', "El monto supera el disponible de USD {$available}.");
+
+            return;
+        }
+
+        $account = $this->input('payment_method') === 'transfer'
+            ? $this->reviewBankAccount($this->integer('bank_account_id'))
+            : null;
+        $credit = $original !== null && $account?->id === $original->bank_account_id
+            ? $original->amount_cents
+            : 0;
+        app(CalculateCashBalances::class)->ensureFundsAvailable($this->amountCents(), $account, creditCents: $credit);
+
+        if ($account !== null) {
+            $this->reviewVoucher($validator, $this->input('voucher'), $account->bank_id, $original?->id, required: true);
+        }
     }
 
     public function amountCents(): int

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\OpeningBalanceRequest;
 use App\Http\Requests\Settings\StoreBankAccountRequest;
 use App\Http\Requests\Settings\UpdateBankAccountRequest;
+use App\Http\Requests\StoreBankRequest;
 use App\Models\Bank;
 use App\Models\BankAccount;
 use App\Models\CashOpening;
@@ -58,9 +59,9 @@ class CashSettingsController extends Controller
         return $this->saved('cash-settings.edit', 'Saldo inicial de caja guardado.');
     }
 
-    public function storeBank(Request $request): RedirectResponse
+    public function storeBank(StoreBankRequest $request): RedirectResponse
     {
-        $data = $request->validate(['name' => ['required', 'string', 'max:100']]);
+        $data = $request->validated();
         $name = Str::squish($data['name']);
         $bank = Bank::query()->createOrFirst(['name_key' => Str::lower($name)], ['name' => $name]);
 

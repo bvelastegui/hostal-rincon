@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Actions\CalculateCashBalances;
+use App\Http\Requests\ResolveCashShortageRequest;
+use App\Http\Requests\StartCashShiftRequest;
 use App\Http\Requests\StoreCashClosingRequest;
 use App\Models\CashClosing;
 use App\Models\CashMovement;
@@ -131,12 +133,9 @@ class CashClosingController extends Controller
         ];
     }
 
-    public function resolveShortage(Request $request, CashClosing $closing): RedirectResponse
+    public function resolveShortage(ResolveCashShortageRequest $request, CashClosing $closing): RedirectResponse
     {
-        $data = $request->validate([
-            'method' => ['required', 'in:deduction,other'],
-            'note' => ['required', 'string', 'max:500'],
-        ], [], ['method' => 'forma de resolución', 'note' => 'nota de resolución']);
+        $data = $request->validated();
 
         $changed = DB::transaction(function () use ($request, $closing, $data): bool {
             $record = CashClosing::query()->lockForUpdate()->findOrFail($closing->id);
@@ -167,12 +166,8 @@ class CashClosingController extends Controller
         return back();
     }
 
-    public function startShift(Request $request, CalculateCashBalances $balances): RedirectResponse
+    public function startShift(StartCashShiftRequest $request, CalculateCashBalances $balances): RedirectResponse
     {
-        $request->validate(['responsible_id' => ['required', 'integer', 'exists:users,id']], [], [
-            'responsible_id' => 'responsable de caja',
-        ]);
-
         DB::transaction(function () use ($request, $balances): void {
             CashOpening::query()->lockForUpdate()->sole();
 

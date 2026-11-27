@@ -20,7 +20,11 @@ import {
 } from '@/components/ui/field';
 import { paymentOptions } from '@/lib/cash-movement';
 import { formatUsd, parseUsdCents } from '@/lib/money';
-import { reviewAmount, reviewSubmission } from '@/lib/record-confirmation';
+import {
+    reviewAmount,
+    reviewSubmission,
+    showValidationErrors,
+} from '@/lib/record-confirmation';
 
 const props = defineProps<{
     employee: { id: number; name: string };
@@ -163,19 +167,22 @@ function advanceReview() {
     };
 }
 
+const advanceRoute = computed(() =>
+    props.replacement
+        ? replace(props.replacement.id)
+        : store(props.employee.id),
+);
+
+function advancePayload() {
+    return { ...form.data(), amount: normalizedAmount.value };
+}
+
 function submit(): void {
     if (form.processing) {
         return;
     }
 
-    form.transform((data) => ({
-        ...data,
-        amount: normalizedAmount.value,
-    })).submit(
-        props.replacement
-            ? replace(props.replacement.id)
-            : store(props.employee.id),
-    );
+    form.transform(advancePayload).submit(advanceRoute.value);
 }
 </script>
 
@@ -232,7 +239,16 @@ function submit(): void {
             novalidate
             v-if="employeeCapacity"
             class="flex flex-1 flex-col gap-5"
-            @submit.capture="reviewSubmission($event, advanceReview)"
+            @submit.capture="
+                reviewSubmission($event, advanceReview, {
+                    ...showValidationErrors(
+                        () => form.clearErrors(),
+                        (errors) => form.setError(errors),
+                    ),
+                    route: advanceRoute,
+                    data: advancePayload(),
+                })
+            "
             @submit.prevent="submit"
         >
             <FieldGroup class="gap-5">
