@@ -4,7 +4,7 @@ El proyecto usa versionamiento semántico (`MAJOR.MINOR.PATCH`). Incrementa `MAJ
 
 Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la fecha en formato `AAAA-MM-DD` y etiqueta el commit de la entrega con `vMAJOR.MINOR.PATCH`.
 
-## 1.0.1 (prevista)
+## 1.0.1 — 2026-11-27
 
 - Laravel valida los formularios antes de mostrar la confirmación. Si hay errores, aparecen en los campos para corregirlos antes de guardar. [HR-22](https://nexodigital.youtrack.cloud/issue/HR-22)
 - El menú y la vista **Empleados y Adelantos** facilitan encontrar la gestión de empleados y el historial de adelantos. [HR-21](https://nexodigital.youtrack.cloud/issue/HR-21)
