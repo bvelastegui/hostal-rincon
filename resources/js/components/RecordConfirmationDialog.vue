@@ -45,9 +45,11 @@ function save(): void {
             }
         "
     >
+        <!-- z-60: la confirmación debe quedar sobre el diálogo que la abrió. -->
         <DialogContent
             :show-close-button="false"
-            class="max-h-[calc(100dvh-2rem)] overflow-y-auto"
+            class="z-60 max-h-[calc(100dvh-2rem)] overflow-y-auto"
+            overlay-class="z-60"
             @close-auto-focus="restoreFocus"
         >
             <template v-if="pendingRecord">
