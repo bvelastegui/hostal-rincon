@@ -4,6 +4,10 @@ El proyecto usa versionamiento semántico (`MAJOR.MINOR.PATCH`). Incrementa `MAJ
 
 Registra los cambios en la versión prevista. Al cerrar una entrega, agrega la fecha en formato `AAAA-MM-DD` y etiqueta el commit de la entrega con `vMAJOR.MINOR.PATCH`.
 
+## 1.0.2 — 2026-11-28
+
+- La confirmación de **Resolver faltante** aparece sobre el diálogo de resolución en **Turno de caja**. Antes quedaba oculta detrás de ese diálogo y el faltante no se podía marcar como resuelto desde la interfaz.
+
 ## 1.0.1 — 2026-11-27
 
 - Laravel valida los formularios antes de mostrar la confirmación. Si hay errores, aparecen en los campos para corregirlos antes de guardar. [HR-22](https://nexodigital.youtrack.cloud/issue/HR-22)
